@@ -1,3 +1,4 @@
+import { Settings2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
 
@@ -20,6 +21,7 @@ export default async function GamePage({
     .eq("id", id)
     .maybeSingle();
   if (!game || !user) notFound();
+  const { data: isAdmin } = await supabase.rpc("is_game_admin", { p_game_id: id });
 
   const [{ data: players }, { data: currentPlayer }, { data: round }] =
     await Promise.all([
@@ -76,25 +78,40 @@ export default async function GamePage({
     ]);
 
   return (
-    <PlayerDashboard
-      locale={locale}
-      game={game}
-      playerId={currentPlayer.id}
-      players={(players ?? []).map((player) => ({
-        ...player,
-        profiles: Array.isArray(player.profiles)
-          ? (player.profiles[0] ?? null)
-          : player.profiles,
-      }))}
-      round={round}
-      balance={Number(wallet?.balance ?? 0)}
-      missions={missions ?? []}
-      hints={hints ?? []}
-      notes={notes ?? []}
-      teamMember={teamMember}
-      hintOffers={hintOffers ?? []}
-      houseSecret={houseSecret && typeof houseSecret === "object" ? houseSecret as Record<string, unknown> : null}
-      activeBuzzes={activeBuzzes ?? []}
-    />
+    <>
+      {isAdmin ? (
+        <div className="mx-auto mb-4 flex max-w-3xl items-center justify-between gap-4 rounded-2xl bg-pink-50 px-5 py-3">
+          <p className="text-sm font-semibold text-pink-800">
+            You're hosting this game.
+          </p>
+          <a
+            href={`/${locale}/games/${id}/host`}
+            className="pill pill-primary inline-flex items-center gap-2 text-sm"
+          >
+            <Settings2 size={16} /> Host controls
+          </a>
+        </div>
+      ) : null}
+      <PlayerDashboard
+        locale={locale}
+        game={game}
+        playerId={currentPlayer.id}
+        players={(players ?? []).map((player) => ({
+          ...player,
+          profiles: Array.isArray(player.profiles)
+            ? (player.profiles[0] ?? null)
+            : player.profiles,
+        }))}
+        round={round}
+        balance={Number(wallet?.balance ?? 0)}
+        missions={missions ?? []}
+        hints={hints ?? []}
+        notes={notes ?? []}
+        teamMember={teamMember}
+        hintOffers={hintOffers ?? []}
+        houseSecret={houseSecret && typeof houseSecret === "object" ? houseSecret as Record<string, unknown> : null}
+        activeBuzzes={activeBuzzes ?? []}
+      />
+    </>
   );
 }
