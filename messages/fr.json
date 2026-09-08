@@ -1,0 +1,77 @@
+{
+  "brand": "Secrets",
+  "nav": {
+    "home": "Parties",
+    "host": "Animation",
+    "profile": "Profil",
+    "signOut": "Déconnexion"
+  },
+  "landing": {
+    "eyebrow": "Votre soirée. Vos secrets. Vos règles.",
+    "title": "Un jeu de soirée rempli de secrets, d’indices et de délicieux chaos.",
+    "subtitle": "Créez des équipes, relevez des missions secrètes, achetez des indices et buzzez vos amis—depuis chaque téléphone.",
+    "start": "Créer une partie",
+    "login": "Se connecter",
+    "phone": "Pensé pour mobile",
+    "tv": "Un tableau grand écran",
+    "live": "Mises à jour en direct"
+  },
+  "auth": {
+    "title": "Entrez dans la maison",
+    "subtitle": "Connectez-vous ou créez votre profil de joueur.",
+    "name": "Nom affiché",
+    "email": "Courriel",
+    "password": "Mot de passe",
+    "signIn": "Se connecter",
+    "signUp": "Créer un compte",
+    "google": "Continuer avec Google",
+    "forgot": "Mot de passe oublié?",
+    "checkEmail": "Consultez votre courriel pour continuer.",
+    "invalid": "Nous n’avons pas pu terminer cette demande."
+  },
+  "games": {
+    "title": "Vos parties",
+    "new": "Nouvelle partie",
+    "empty": "Aucune partie. Créez-en une et invitez vos amis.",
+    "name": "Nom de la partie",
+    "format": "Format",
+    "cash": "Cagnotte de départ",
+    "create": "Créer la partie",
+    "quick": "Soirée express",
+    "weekend": "Week-end",
+    "custom": "Sur mesure"
+  },
+  "play": {
+    "wallet": "Ma cagnotte",
+    "mission": "Mission en cours",
+    "hints": "Mes indices",
+    "notes": "Carnet de théories",
+    "team": "Mon équipe",
+    "houseSecret": "Secret de la maison",
+    "accuse": "Buzz accusation",
+    "buyHint": "Buzz indice",
+    "waiting": "En attente de l’animateur",
+    "share": "Partager",
+    "steal": "Voler"
+  },
+  "host": {
+    "control": "Régie",
+    "players": "Joueurs",
+    "rounds": "Manches",
+    "secrets": "Secrets",
+    "missions": "Missions",
+    "buzzes": "Buzz en attente",
+    "economy": "Économie",
+    "events": "Événements et pouvoirs",
+    "votes": "Votes",
+    "display": "Ouvrir l’écran TV",
+    "lock": "Verrouiller les secrets",
+    "nextRound": "Lancer la prochaine manche"
+  },
+  "display": {
+    "round": "Manche en direct",
+    "balances": "Cagnottes de la maison",
+    "clue": "Nouvel indice",
+    "waiting": "Le prochain rebondissement arrive…"
+  }
+}

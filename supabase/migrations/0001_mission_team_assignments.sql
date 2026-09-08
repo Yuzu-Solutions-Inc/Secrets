@@ -1,0 +1,3 @@
+ALTER TABLE "mission_assignments" DROP CONSTRAINT "mission_assignments_mission_id_player_id_pk";--> statement-breakpoint
+ALTER TABLE "mission_assignments" ADD COLUMN "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL;--> statement-breakpoint
+ALTER TABLE "mission_assignments" ADD CONSTRAINT "mission_assignment_has_owner" CHECK (num_nonnulls("mission_assignments"."player_id", "mission_assignments"."team_id") = 1);

@@ -1,0 +1,311 @@
+"use server";
+
+import { randomBytes } from "node:crypto";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
+
+import { gameFormats, roundTemplates } from "@/lib/game/templates";
+import { roundConfigSchema } from "@/lib/game/rules";
+import { getUser } from "@/lib/auth/session";
+import { setActiveOrganizationId } from "@/lib/auth/active-org";
+import { createClient } from "@/lib/supabase/server";
+
+const localeSchema = z.enum(["en", "fr"]).default("fr");
+
+async function actor() {
+  const user = await getUser();
+  if (!user) throw new Error("unauthorized");
+  return user;
+}
+
+export async function createOrganization(formData: FormData) {
+  const parsed = z.object({
+    name: z.string().trim().min(2).max(80),
+    locale: localeSchema,
+  }).parse({
+    name: formData.get("name"),
+    locale: formData.get("locale"),
+  });
+  await actor();
+  const supabase = await createClient();
+  const slug = `${parsed.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${randomBytes(3).toString("hex")}`;
+  const { data, error } = await supabase.rpc("create_organization", {
+    p_name: parsed.name,
+    p_slug: slug,
+    p_locale: parsed.locale,
+  });
+  if (error) throw new Error(error.message);
+  await setActiveOrganizationId(String(data));
+  redirect(`/${parsed.locale}/games`);
+}
+
+export async function createGame(formData: FormData) {
+  const parsed = z.object({
+    organizationId: z.string().uuid(),
+    title: z.string().trim().min(2).max(100),
+    format: z.enum(["quick", "weekend", "custom"]),
+    startingCash: z.coerce.number().int().min(0).max(100_000_000),
+    locale: localeSchema,
+  }).parse({
+    organizationId: formData.get("organizationId"),
+    title: formData.get("title"),
+    format: formData.get("format"),
+    startingCash: formData.get("startingCash"),
+    locale: formData.get("locale"),
+  });
+  const user = await actor();
+  const supabase = await createClient();
+  const code = randomBytes(4).toString("hex").toUpperCase();
+  const { data: game, error } = await supabase
+    .from("games")
+    .insert({
+      organization_id: parsed.organizationId,
+      title: parsed.title,
+      format: parsed.format,
+      starting_cash: parsed.startingCash * 100,
+      public_code: code,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+
+  await supabase.from("game_players").insert({ game_id: game.id, user_id: user.id });
+  const keys = gameFormats[parsed.format];
+  if (keys.length) {
+    const rows = keys.map((key, position) => {
+      const template = roundTemplates.find((item) => item.key === key)!;
+      return {
+        game_id: game.id,
+        title: template.title[parsed.locale],
+        kind: template.kind,
+        position,
+        config: roundConfigSchema.parse(template.config),
+      };
+    });
+    const { error: roundsError } = await supabase.from("game_rounds").insert(rows);
+    if (roundsError) throw new Error(roundsError.message);
+  }
+  redirect(`/${parsed.locale}/games/${game.id}/host`);
+}
+
+export async function submitSecret(formData: FormData) {
+  const parsed = z.object({
+    gameId: z.string().uuid(),
+    playerId: z.string().uuid(),
+    value: z.string().trim().min(3).max(500),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("submit_player_secret", {
+    p_game_id: parsed.gameId,
+    p_player_id: parsed.playerId,
+    p_value: parsed.value,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+}
+
+export async function accusationBuzz(formData: FormData) {
+  const parsed = z.object({
+    gameId: z.string().uuid(),
+    targetPlayerId: z.string().uuid(),
+    theory: z.string().trim().min(3).max(500),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("create_accusation_buzz", {
+    p_game_id: parsed.gameId,
+    p_target_player_id: parsed.targetPlayerId,
+    p_theory: parsed.theory,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+}
+
+export async function stageAccusationBuzz(formData: FormData) {
+  const parsed = z.object({
+    gameId: z.string().uuid(),
+    buzzId: z.string().uuid(),
+    status: z.enum(["confrontation", "confirmed", "retracted"]),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("stage_accusation_buzz", {
+    p_buzz_id: parsed.buzzId,
+    p_status: parsed.status,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`, "layout");
+}
+
+export async function buyHint(formData: FormData) {
+  const parsed = z.object({
+    gameId: z.string().uuid(),
+    targetPlayerId: z.string().uuid(),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("buy_next_hint", {
+    p_game_id: parsed.gameId,
+    p_target_player_id: parsed.targetPlayerId,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+}
+
+export async function setDilemmaChoice(formData: FormData) {
+  const parsed = z.object({
+    teamId: z.string().uuid(),
+    playerId: z.string().uuid(),
+    gameId: z.string().uuid(),
+    choice: z.enum(["share", "steal"]),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("team_members")
+    .update({
+      dilemma_choice: parsed.choice,
+      dilemma_locked_at: new Date().toISOString(),
+    })
+    .eq("team_id", parsed.teamId)
+    .eq("player_id", parsed.playerId);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+}
+
+export async function hostTransition(formData: FormData) {
+  const parsed = z.object({
+    gameId: z.string().uuid(),
+    action: z.enum(["lock_secrets", "next_round", "pause", "resume", "finale", "complete"]),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("host_transition", {
+    p_game_id: parsed.gameId,
+    p_action: parsed.action,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`, "layout");
+}
+
+export async function adjudicateBuzz(formData: FormData) {
+  const parsed = z.object({
+    gameId: z.string().uuid(),
+    buzzId: z.string().uuid(),
+    result: z.enum(["correct", "partial", "wrong", "cancelled"]),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("resolve_accusation_buzz", {
+    p_buzz_id: parsed.buzzId,
+    p_result: parsed.result,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`, "layout");
+}
+
+export async function createHintOffer(formData: FormData) {
+  const parsed = z.object({
+    gameId: z.string().uuid(),
+    hintId: z.string().uuid(),
+    buyerPlayerId: z.string().uuid(),
+    price: z.coerce.number().int().positive(),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("create_hint_offer", {
+    p_game_id: parsed.gameId,
+    p_hint_id: parsed.hintId,
+    p_buyer_player_id: parsed.buyerPlayerId,
+    p_price: parsed.price * 100,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+}
+
+export async function shareHint(formData: FormData) {
+  const parsed = z.object({
+    gameId: z.string().uuid(),
+    hintId: z.string().uuid(),
+    recipientPlayerId: z.string().uuid(),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("share_hint", {
+    p_game_id: parsed.gameId,
+    p_hint_id: parsed.hintId,
+    p_recipient_player_id: parsed.recipientPlayerId,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+}
+
+export async function resolveHintOffer(formData: FormData) {
+  const parsed = z.object({
+    gameId: z.string().uuid(),
+    offerId: z.string().uuid(),
+    accept: z.enum(["true", "false"]).transform((value) => value === "true"),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("resolve_hint_offer", {
+    p_offer_id: parsed.offerId,
+    p_accept: parsed.accept,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+}
+
+export async function saveTheoryNote(formData: FormData) {
+  const parsed = z.object({
+    gameId: z.string().uuid(),
+    playerId: z.string().uuid(),
+    body: z.string().trim().min(1).max(3000),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.from("theory_notes").insert({
+    game_id: parsed.gameId,
+    player_id: parsed.playerId,
+    body: parsed.body,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+}
+
+export async function submitMission(formData: FormData) {
+  const parsed = z.object({
+    gameId: z.string().uuid(),
+    missionId: z.string().uuid(),
+    playerId: z.string().uuid(),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("submit_mission", {
+    p_mission_id: parsed.missionId,
+    p_player_id: parsed.playerId,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+}
+
+export async function submitHouseTheory(formData: FormData) {
+  const parsed = z.object({
+    gameId: z.string().uuid(),
+    houseSecretId: z.string().uuid(),
+    playerId: z.string().uuid(),
+    theory: z.string().trim().min(3).max(500),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.from("house_secret_submissions").insert({
+    house_secret_id: parsed.houseSecretId,
+    player_id: parsed.playerId,
+    theory: parsed.theory,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+}
