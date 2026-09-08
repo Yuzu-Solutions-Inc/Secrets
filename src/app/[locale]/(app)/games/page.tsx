@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarClock, Plus, Sparkles } from "lucide-react";
+import { ArrowRight, CalendarClock, Plus, Settings2, Sparkles } from "lucide-react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { CreateOrganizationForm } from "./create-organization-form";
@@ -31,6 +31,7 @@ export default async function GamesPage({
   }
 
   const organizationId = memberships[0].organization_id as string;
+  const isOrgAdmin = memberships[0].role === "admin";
   const supabase = await createClient();
   const { data: games } = await supabase
     .from("games")
@@ -59,7 +60,8 @@ export default async function GamesPage({
       ) : (
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {games.map((game) => (
-            <a key={game.id} href={`/${locale}/games/${game.id}`} className="bubble-card group p-6 transition hover:-translate-y-1">
+            <div key={game.id} className="bubble-card group relative p-6 transition hover:-translate-y-1">
+              <a href={`/${locale}/games/${game.id}`} className="absolute inset-0" aria-label={game.title} />
               <div className="flex items-center justify-between">
                 <span className="rounded-full bg-pink-100 px-3 py-1 text-xs font-black uppercase text-pink-700">
                   {game.status.replaceAll("_", " ")}
@@ -71,7 +73,15 @@ export default async function GamesPage({
                 <span className="flex items-center gap-2"><CalendarClock size={16} /> {game.format}</span>
                 <span className="font-mono font-bold">{game.public_code}</span>
               </div>
-            </a>
+              {isOrgAdmin ? (
+                <a
+                  href={`/${locale}/games/${game.id}/host`}
+                  className="pill relative z-10 mt-4 inline-flex items-center gap-2 bg-white text-sm"
+                >
+                  <Settings2 size={16} /> Host controls
+                </a>
+              ) : null}
+            </div>
           ))}
         </div>
       )}
