@@ -19,25 +19,45 @@ async function actor() {
   return user;
 }
 
-export async function createOrganization(formData: FormData) {
+export type CreateOrganizationState = { error: string | null };
+
+export async function createOrganization(
+  _prevState: CreateOrganizationState,
+  formData: FormData,
+): Promise<CreateOrganizationState> {
   const parsed = z.object({
     name: z.string().trim().min(2).max(80),
     locale: localeSchema,
-  }).parse({
+  }).safeParse({
     name: formData.get("name"),
     locale: formData.get("locale"),
   });
+  if (!parsed.success) {
+    return { error: "Please enter a group name between 2 and 80 characters." };
+  }
+
   await actor();
   const supabase = await createClient();
-  const slug = `${parsed.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${randomBytes(3).toString("hex")}`;
+  const slug = `${parsed.data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${randomBytes(3).toString("hex")}`;
   const { data, error } = await supabase.rpc("create_organization", {
-    p_name: parsed.name,
+    p_name: parsed.data.name,
     p_slug: slug,
-    p_locale: parsed.locale,
+    p_locale: parsed.data.locale,
   });
-  if (error) throw new Error(error.message);
+
+  if (error) {
+    if (error.message.includes("user_already_has_organization")) {
+      return { error: "You already have a game group. Refreshing…" };
+    }
+    return { error: "Something went wrong creating your group. Please try again." };
+  }
+
   await setActiveOrganizationId(String(data));
-  redirect(`/${parsed.locale}/games`);
+  // Without this, Next.js serves the stale cached /games page after the
+  // redirect below, which still shows the "create your group" empty state —
+  // making it look like the click did nothing.
+  revalidatePath(`/${parsed.data.locale}/games`);
+  redirect(`/${parsed.data.locale}/games`);
 }
 
 export async function createGame(formData: FormData) {
