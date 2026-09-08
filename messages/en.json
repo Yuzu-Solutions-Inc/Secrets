@@ -1,0 +1,77 @@
+{
+  "brand": "Secrets",
+  "nav": {
+    "home": "Games",
+    "host": "Host",
+    "profile": "Profile",
+    "signOut": "Sign out"
+  },
+  "landing": {
+    "eyebrow": "Your night. Your secrets. Your rules.",
+    "title": "A party game full of secrets, clues and delicious chaos.",
+    "subtitle": "Create teams, complete secret missions, buy clues and buzz your friends—right from everyone’s phone.",
+    "start": "Create a game",
+    "login": "Sign in",
+    "phone": "Made for phones",
+    "tv": "A big-screen dashboard",
+    "live": "Live game updates"
+  },
+  "auth": {
+    "title": "Enter the house",
+    "subtitle": "Sign in or create your player profile.",
+    "name": "Display name",
+    "email": "Email",
+    "password": "Password",
+    "signIn": "Sign in",
+    "signUp": "Create account",
+    "google": "Continue with Google",
+    "forgot": "Forgot password?",
+    "checkEmail": "Check your email to continue.",
+    "invalid": "We could not complete that request."
+  },
+  "games": {
+    "title": "Your games",
+    "new": "New game",
+    "empty": "No game yet. Create one and invite your friends.",
+    "name": "Game name",
+    "format": "Format",
+    "cash": "Starting cash",
+    "create": "Create game",
+    "quick": "Quick Night",
+    "weekend": "Weekend",
+    "custom": "Custom"
+  },
+  "play": {
+    "wallet": "My wallet",
+    "mission": "Current mission",
+    "hints": "My hints",
+    "notes": "Theory notebook",
+    "team": "My team",
+    "houseSecret": "House Secret",
+    "accuse": "Accusation buzz",
+    "buyHint": "Hint buzz",
+    "waiting": "Waiting for the host",
+    "share": "Share",
+    "steal": "Steal"
+  },
+  "host": {
+    "control": "Control room",
+    "players": "Players",
+    "rounds": "Rounds",
+    "secrets": "Secrets",
+    "missions": "Missions",
+    "buzzes": "Buzz queue",
+    "economy": "Economy",
+    "events": "Events & powers",
+    "votes": "Votes",
+    "display": "Open TV dashboard",
+    "lock": "Lock secrets",
+    "nextRound": "Start next round"
+  },
+  "display": {
+    "round": "Live round",
+    "balances": "House balances",
+    "clue": "New clue",
+    "waiting": "The next twist is coming…"
+  }
+}

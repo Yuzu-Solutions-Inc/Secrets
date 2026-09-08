@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #32142f;
+  --muted: #76506f;
+  --pink: #eb2f96;
+  --pink-dark: #c51d76;
+  --rose: #ff86c8;
+  --blush: #fff0f8;
+  --cream: #fffafc;
+  --lilac: #efe4ff;
+  --yellow: #ffd86b;
+  --surface: rgba(255, 255, 255, 0.88);
+  --border: rgba(117, 45, 91, 0.14);
+  --shadow: 0 18px 55px rgba(157, 40, 111, 0.16);
+  --radius: 1.5rem;
+}
+
+* { box-sizing: border-box; }
+html { min-height: 100%; background: var(--cream); }
+body {
+  min-height: 100dvh;
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 8% 5%, rgba(255, 134, 200, .34), transparent 28rem),
+    radial-gradient(circle at 92% 16%, rgba(190, 140, 255, .24), transparent 24rem),
+    linear-gradient(160deg, var(--cream), var(--blush));
+  font-family: Inter, ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+}
+
+button, input, textarea, select { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+
+.display {
+  font-family: "Arial Rounded MT Bold", "Trebuchet MS", ui-rounded, sans-serif;
+  letter-spacing: -0.035em;
+}
+
+.bubble-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  min-height: 2.75rem;
+  padding: .65rem 1rem;
+  border-radius: 999px;
+  border: 0;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.pill-primary { color: white; background: linear-gradient(135deg, var(--pink), #a935d0); }
+.pill-secondary { color: var(--ink); background: white; border: 1px solid var(--border); }
+.pill:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 4px solid rgba(235, 47, 150, .25);
+  outline-offset: 2px;
+}
+
+.field {
+  width: 100%;
+  min-height: 3rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: white;
+  color: var(--ink);
+  padding: .75rem 1rem;
+}
+
+.safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+.screen-safe { padding: clamp(1.5rem, 4vw, 5rem); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .float { animation: float 5s ease-in-out infinite; }
+  @keyframes float { 50% { transform: translateY(-8px) rotate(1deg); } }
+}
