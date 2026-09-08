@@ -1,7 +1,7 @@
 import { ArrowRight, CalendarClock, Plus, Sparkles } from "lucide-react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
-import { createOrganization } from "@/app/actions/game";
+import { CreateOrganizationForm } from "./create-organization-form";
 import { getMemberships } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,11 +24,7 @@ export default async function GamesPage({
           <p className="mt-2 leading-7 text-[var(--muted)]">
             Your group keeps games, friends and reusable round templates together.
           </p>
-          <form action={createOrganization} className="mt-7 space-y-4">
-            <input type="hidden" name="locale" value={locale} />
-            <input className="field" name="name" placeholder="Friday Night Crew" required />
-            <button className="pill pill-primary w-full">{t("create")}</button>
-          </form>
+          <CreateOrganizationForm locale={locale} label={t("create")} />
         </div>
       </section>
     );
