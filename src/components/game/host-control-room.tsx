@@ -23,8 +23,9 @@ import {
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 
 import { adjudicateBuzz, hostTransition, stageAccusationBuzz } from "@/app/actions/game";
 import {
@@ -67,6 +68,63 @@ import { Avatar } from "./avatar";
 import { WhitelistManager } from "./whitelist-manager";
 
 type Row = Record<string, unknown>;
+
+// Attendance / elimination toggles for one player card. Calls the server
+// action directly (not via <form>) so a refusal comes back as a value and
+// can be shown in a toast instead of tripping the route error boundary.
+function PlayerStatusControls({
+  locale,
+  gameId,
+  playerId,
+  active,
+  canEliminate,
+}: {
+  locale: string;
+  gameId: string;
+  playerId: string;
+  active: boolean;
+  canEliminate: boolean;
+}) {
+  const [pending, startTransition] = useTransition();
+
+  const submit = (status: string) =>
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("locale", locale);
+      fd.set("gameId", gameId);
+      fd.set("playerId", playerId);
+      fd.set("status", status);
+      const res = await setPlayerPlayStatus(fd);
+      if (res?.error) toast.error(res.error);
+    });
+
+  return (
+    <div className="mt-3 flex items-center gap-2">
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => submit(active ? "inactive" : "active")}
+        className="grid size-8 place-items-center rounded-full bg-pink-50 text-pink-600 hover:bg-pink-100 disabled:opacity-50"
+        title={active ? "Deactivate — player can't come (reversible)" : "Reactivate player"}
+        aria-label={active ? "Deactivate player" : "Reactivate player"}
+      >
+        {active ? <UserRoundX size={15} /> : <UserRoundCheck size={15} />}
+      </button>
+      {active ? (
+        <button
+          type="button"
+          disabled={pending || !canEliminate}
+          onClick={() => submit("eliminated")}
+          className="grid size-8 place-items-center rounded-full bg-pink-50 text-[var(--muted)] hover:bg-pink-100 disabled:cursor-not-allowed disabled:opacity-40"
+          title={canEliminate ? "Eliminate player" : "Eliminate — start a live elimination round first"}
+          aria-label="Eliminate player"
+        >
+          <Skull size={15} />
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 export function HostControlRoom({
   locale,
@@ -335,36 +393,13 @@ export function HostControlRoom({
                       )) : <li className="text-xs text-[var(--muted)]">No movements yet.</li>}
                     </ul>
                   ) : null}
-                  <div className="mt-3 flex items-center gap-2">
-                    <form action={setPlayerPlayStatus}>
-                      <input type="hidden" name="locale" value={locale} />
-                      <input type="hidden" name="gameId" value={String(game.id)} />
-                      <input type="hidden" name="playerId" value={pid} />
-                      <input type="hidden" name="status" value={active ? "inactive" : "active"} />
-                      <button
-                        className="grid size-8 place-items-center rounded-full bg-pink-50 text-pink-600 hover:bg-pink-100"
-                        title={active ? "Deactivate — player can't come (reversible)" : "Reactivate player"}
-                        aria-label={active ? "Deactivate player" : "Reactivate player"}
-                      >
-                        {active ? <UserRoundX size={15} /> : <UserRoundCheck size={15} />}
-                      </button>
-                    </form>
-                    {active ? (
-                      <form action={setPlayerPlayStatus}>
-                        <input type="hidden" name="locale" value={locale} />
-                        <input type="hidden" name="gameId" value={String(game.id)} />
-                        <input type="hidden" name="playerId" value={pid} />
-                        <input type="hidden" name="status" value="eliminated" />
-                        <button
-                          className="grid size-8 place-items-center rounded-full bg-pink-50 text-[var(--muted)] hover:bg-pink-100"
-                          title="Eliminate — requires a live elimination round"
-                          aria-label="Eliminate player"
-                        >
-                          <Skull size={15} />
-                        </button>
-                      </form>
-                    ) : null}
-                  </div>
+                  <PlayerStatusControls
+                    locale={locale}
+                    gameId={String(game.id)}
+                    playerId={pid}
+                    active={active}
+                    canEliminate={currentRound?.kind === "elimination" && currentRound?.status === "live"}
+                  />
                 </article>
               );
               })}

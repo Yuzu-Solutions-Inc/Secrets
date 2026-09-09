@@ -492,8 +492,19 @@ export async function setPlayerPlayStatus(formData: FormData) {
     p_player_id: parsed.playerId,
     p_status: parsed.status,
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Surface the two expected refusals from `set_player_play_status` as
+    // readable text; the host sees these in a toast, not the error boundary.
+    const message =
+      error.message === "elimination_round_required"
+        ? "Start a live elimination round before eliminating a player."
+        : error.message === "forbidden"
+          ? "You don't have permission to change this player's status."
+          : error.message;
+    return { error: message };
+  }
   refresh(parsed.locale, parsed.gameId);
+  return { error: null };
 }
 
 // Host action: give every active player without a secret a random unused entry
