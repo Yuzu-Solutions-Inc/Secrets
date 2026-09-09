@@ -12,6 +12,7 @@ import {
   MonitorUp,
   Pause,
   Shield,
+  SlidersHorizontal,
   Sparkles,
   Users,
   Vote,
@@ -43,6 +44,7 @@ import {
   saveWinnerFormula,
   setPlayerPlayStatus,
   startMission,
+  updateGameSettings,
   uploadGameBackground,
   validateMission,
 } from "@/app/actions/admin";
@@ -126,7 +128,14 @@ export function HostControlRoom({
     ["events", t("events"), Shield],
     ["house", "House Secret", Lightbulb],
     ["votes", t("votes"), Vote],
+    ["settings", t("settings"), SlidersHorizontal],
   ] as const;
+
+  const settings = (game.settings ?? {}) as Row;
+  const economy = (settings.economy ?? {}) as Row;
+  const settingsAccusationStake = Number(economy.accusation_stake ?? economy.accusationStake ?? hintPriceConfig?.accusationStake ?? 0);
+  const settingsHintPrice = Number(economy.hint_price ?? economy.hintPrice ?? hintPrice);
+  const startsAtLocal = game.starts_at ? new Date(String(game.starts_at)).toISOString().slice(0, 16) : "";
 
   return (
     <section className="mx-auto max-w-5xl pb-20">
@@ -147,15 +156,6 @@ export function HostControlRoom({
           <input type="hidden" name="action" value="lock_secrets" />
           <button className="pill pill-secondary"><Eye size={18} /> {t("lock")}</button>
         </form>
-        <details className="relative">
-          <summary className="pill pill-secondary list-none">Background</summary>
-          <form action={uploadGameBackground} className="absolute right-0 top-14 z-20 w-72 space-y-2 rounded-2xl bg-white p-4 shadow-xl">
-            <input type="hidden" name="locale" value={locale} />
-            <input type="hidden" name="gameId" value={String(game.id)} />
-            <input className="field" type="file" name="image" accept="image/png,image/jpeg,image/webp" required />
-            <button className="pill pill-primary w-full">Upload</button>
-          </form>
-        </details>
         <form action={hostTransition}>
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="gameId" value={String(game.id)} />
@@ -728,6 +728,51 @@ export function HostControlRoom({
               <button className="pill pill-primary sm:col-span-2">Save winner formula</button>
             </form>
             <a className="pill pill-secondary mt-3 w-full" href={`/api/games/${String(game.id)}/results`}>Export results CSV</a>
+          </div>
+        ) : null}
+
+        {tab === "settings" ? (
+          <div className="space-y-4">
+            <form action={updateGameSettings} className="bubble-card grid gap-4 p-6 sm:grid-cols-2">
+              <input type="hidden" name="locale" value={locale} />
+              <input type="hidden" name="gameId" value={String(game.id)} />
+              <div className="sm:col-span-2">
+                <SlidersHorizontal className="text-pink-600" />
+                <h2 className="display mt-3 text-3xl font-black">Game settings</h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">Economy is in whole {String(game.currency_symbol)}. Buzz and hint prices apply to every round.</p>
+              </div>
+              <label className="font-bold">Starting cash
+                <input className="field mt-1" name="startingCash" type="number" min="0" defaultValue={Math.round(Number(game.starting_cash ?? 0) / 100)} required />
+              </label>
+              <label className="font-bold">Accusation buzz cost
+                <input className="field mt-1" name="accusationStake" type="number" min="0" defaultValue={Math.round(settingsAccusationStake / 100)} required />
+              </label>
+              <label className="font-bold">Hint cost
+                <input className="field mt-1" name="hintPrice" type="number" min="0" defaultValue={Math.round(settingsHintPrice / 100)} required />
+              </label>
+              <label className="font-bold">Language
+                <select className="field mt-1" name="language" defaultValue={String(settings.language ?? locale)}>
+                  <option value="fr">Français</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+              <label className="font-bold">Start date &amp; time <span className="font-normal text-[var(--muted)]">(reminder only — the game never starts on its own)</span>
+                <input className="field mt-1" name="startsAt" type="datetime-local" defaultValue={startsAtLocal} />
+              </label>
+              <label className="font-bold">Location
+                <input className="field mt-1" name="location" defaultValue={String(settings.location ?? "")} placeholder="The Pink House, 12 Rose St." />
+              </label>
+              <button className="pill pill-primary sm:col-span-2">Save settings</button>
+            </form>
+
+            <form action={uploadGameBackground} className="bubble-card grid gap-3 p-6">
+              <h3 className="font-black">Dashboard background image</h3>
+              <p className="text-sm text-[var(--muted)]">Shown behind the TV dashboard. PNG, JPEG or WebP.</p>
+              <input type="hidden" name="locale" value={locale} />
+              <input type="hidden" name="gameId" value={String(game.id)} />
+              <input className="field" type="file" name="image" accept="image/png,image/jpeg,image/webp" required />
+              <button className="pill pill-secondary w-fit">Upload background</button>
+            </form>
           </div>
         ) : null}
 
