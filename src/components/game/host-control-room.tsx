@@ -106,6 +106,13 @@ export function HostControlRoom({
   // money-correction tools (item 11).
   const gameStarted = ["live", "finale", "completed", "archived"].includes(String(game.status));
 
+  // 1s clock for the run-of-show timer.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
   // Keep the control room (buzz queue, balances, events) in lock-step with the
   // TV and player dashboards via the shared display_cues refresh signal.
   useEffect(() => {
@@ -169,26 +176,55 @@ export function HostControlRoom({
         </a>
       </div>
 
-      <div className="bubble-card mt-6 flex flex-wrap gap-2 p-3">
-        <form action={hostTransition}>
-          <input type="hidden" name="locale" value={locale} />
-          <input type="hidden" name="gameId" value={String(game.id)} />
-          <input type="hidden" name="action" value="lock_secrets" />
-          <button className="pill pill-secondary"><Eye size={18} /> {t("lock")}</button>
-        </form>
-        <form action={hostTransition}>
-          <input type="hidden" name="locale" value={locale} />
-          <input type="hidden" name="gameId" value={String(game.id)} />
-          <input type="hidden" name="action" value="next_round" />
-          <button className="pill pill-primary"><CirclePlay size={18} /> {t("nextRound")}</button>
-        </form>
-        <form action={hostTransition}>
-          <input type="hidden" name="locale" value={locale} />
-          <input type="hidden" name="gameId" value={String(game.id)} />
-          <input type="hidden" name="action" value={currentRound?.status === "paused" ? "resume" : "pause"} />
-          <button className="pill pill-secondary"><Pause size={18} /> Pause / resume</button>
-        </form>
-      </div>
+      {(() => {
+        const paused = currentRound?.status === "paused";
+        const endsAt = currentRound?.ends_at ? new Date(String(currentRound.ends_at)).getTime() : null;
+        const remaining = endsAt ? Math.max(0, Math.floor((endsAt - now) / 1000)) : null;
+        return (
+          <div className="bubble-card mt-6 flex flex-wrap items-center gap-3 p-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-black uppercase tracking-widest text-pink-600">{t("currentRound")}</p>
+              <p className="display truncate text-lg font-black">
+                {currentRound ? String(currentRound.title) : String(game.status) === "finale" ? "Finale" : "Not started"}
+                {paused ? <span className="ml-2 text-sm font-bold text-amber-700">paused</span> : null}
+              </p>
+            </div>
+            {remaining !== null ? (
+              <span className="display shrink-0 text-2xl font-black tabular-nums">
+                {String(Math.floor(remaining / 60)).padStart(2, "0")}:{String(remaining % 60).padStart(2, "0")}
+              </span>
+            ) : null}
+            <div className="flex shrink-0 items-center gap-2">
+              <form action={hostTransition}>
+                <input type="hidden" name="locale" value={locale} />
+                <input type="hidden" name="gameId" value={String(game.id)} />
+                <input type="hidden" name="action" value="prev_round" />
+                <button className="pill pill-secondary" aria-label="Previous round">◀</button>
+              </form>
+              <form action={hostTransition}>
+                <input type="hidden" name="locale" value={locale} />
+                <input type="hidden" name="gameId" value={String(game.id)} />
+                <input type="hidden" name="action" value={paused ? "resume" : "pause"} />
+                <button className="pill pill-secondary" aria-label={paused ? "Resume" : "Pause"}>
+                  {paused ? <CirclePlay size={18} /> : <Pause size={18} />}
+                </button>
+              </form>
+              <form action={hostTransition}>
+                <input type="hidden" name="locale" value={locale} />
+                <input type="hidden" name="gameId" value={String(game.id)} />
+                <input type="hidden" name="action" value="next_round" />
+                <button className="pill pill-primary"><CirclePlay size={18} /> {t("nextRound")}</button>
+              </form>
+            </div>
+            <form action={hostTransition} className="shrink-0">
+              <input type="hidden" name="locale" value={locale} />
+              <input type="hidden" name="gameId" value={String(game.id)} />
+              <input type="hidden" name="action" value="lock_secrets" />
+              <button className="pill pill-secondary"><Eye size={18} /> {t("lock")}</button>
+            </form>
+          </div>
+        );
+      })()}
 
       <div className="mt-6 flex gap-2 overflow-x-auto pb-2">
         {tabs.map(([key, label, Icon]) => (
