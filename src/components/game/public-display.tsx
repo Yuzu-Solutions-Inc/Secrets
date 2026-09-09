@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, Maximize2, PartyPopper, Siren, Sparkles, Timer, Unlock, Volume2, VolumeX } from "lucide-react";
+import { Maximize2, PartyPopper, Siren, Sparkles, Timer, Unlock, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -8,9 +8,6 @@ import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
 
 type Row = Record<string, unknown>;
-
-const DESIGN_W = 1280;
-const DESIGN_H = 800;
 
 type Accusation = {
   id: string;
@@ -50,7 +47,6 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
   const [alarm, setAlarm] = useState(false);
   const [verdictCard, setVerdictCard] = useState<Verdict | null>(null);
 
-  const stageRef = useRef<HTMLDivElement>(null);
   const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
   const fetchingRef = useRef(false);
   const debounceRef = useRef<number | null>(null);
@@ -175,25 +171,6 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
     };
   }, [gameId, scheduleRefetch, refetch, supabase]);
 
-  // ---- fit the fixed-size stage into exactly one viewport --------------
-  useEffect(() => {
-    const fit = () => {
-      const vw = window.visualViewport?.width ?? window.innerWidth;
-      const vh = window.visualViewport?.height ?? window.innerHeight;
-      const s = Math.min(vw / DESIGN_W, vh / DESIGN_H);
-      stageRef.current?.style.setProperty("--tv-s", String(s));
-    };
-    fit();
-    window.addEventListener("resize", fit);
-    window.addEventListener("orientationchange", fit);
-    window.visualViewport?.addEventListener("resize", fit);
-    return () => {
-      window.removeEventListener("resize", fit);
-      window.removeEventListener("orientationchange", fit);
-      window.visualViewport?.removeEventListener("resize", fit);
-    };
-  }, []);
-
   // ---- fire the sting when a new buzz takes the spotlight --------------
   useEffect(() => {
     const id = accusation?.id ?? null;
@@ -285,8 +262,6 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
     return () => window.clearInterval(id);
   }, [pageCount]);
 
-  const cols = perPage <= 4 ? 2 : perPage <= 9 ? 3 : 4;
-
   const pagePlayers = paginated
     ? boardPlayers.slice(safePage * perPage, safePage * perPage + perPage)
     : boardPlayers;
@@ -295,29 +270,34 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
     () => (
       <div
         key={safePage}
-        className="secrets-cards-page grid h-full min-h-0 gap-[14px] overflow-hidden"
-        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: "minmax(0, 1fr)" }}
+        className="secrets-cards-page grid content-start gap-[clamp(.5rem,1.2vw,1rem)] overflow-y-auto"
+        style={{
+          // Cards have a real min and max width and a capped height — they don't
+          // stretch to consume empty space when there are only a few players.
+          gridTemplateColumns: "repeat(auto-fill, minmax(clamp(180px, 20vw, 300px), 1fr))",
+          gridAutoRows: "minmax(clamp(96px, 13vh, 150px), auto)",
+        }}
       >
         {pagePlayers.map((player) => {
           const revealed = Boolean(player.secret_revealed);
           return (
             <div
               key={String(player.id)}
-              className={`flex flex-col justify-center rounded-[18px] px-[18px] py-[14px] ${revealed ? "bg-violet-100 ring-2 ring-violet-500" : "bg-pink-50"}`}
+              className={`flex flex-col justify-center rounded-[18px] px-[clamp(.75rem,1.4vw,1.25rem)] py-[clamp(.6rem,1.1vw,1rem)] ${revealed ? "bg-violet-100 ring-2 ring-violet-500" : "bg-pink-50"}`}
             >
-              <div className="flex items-center gap-[12px]">
+              <div className="flex items-center gap-[clamp(.5rem,1vw,.85rem)]">
                 <span
-                  className={`grid size-[42px] shrink-0 place-items-center rounded-full text-[18px] font-black text-white ${revealed ? "bg-gradient-to-br from-violet-500 to-fuchsia-700" : "bg-gradient-to-br from-pink-400 to-violet-600"}`}
+                  className={`grid size-[clamp(30px,3vw,44px)] shrink-0 place-items-center rounded-full text-[clamp(.85rem,1.4vw,1.15rem)] font-black text-white ${revealed ? "bg-gradient-to-br from-violet-500 to-fuchsia-700" : "bg-gradient-to-br from-pink-400 to-violet-600"}`}
                 >
                   {String(player.display_name ?? "?").slice(0, 1)}
                 </span>
-                <p className="truncate text-[21px] font-black">{String(player.display_name ?? "Player")}</p>
+                <p className="truncate text-[clamp(.95rem,1.5vw,1.4rem)] font-black">{String(player.display_name ?? "Player")}</p>
               </div>
-              <p className={`display mt-[8px] text-[29px] font-black leading-none ${revealed ? "text-violet-800" : "text-pink-700"}`}>
+              <p className={`display mt-[clamp(.35rem,.8vw,.6rem)] text-[clamp(1.2rem,2.1vw,1.9rem)] font-black leading-none ${revealed ? "text-violet-800" : "text-pink-700"}`}>
                 {formatMoney(Number(player.balance ?? 0), String(game.currency_symbol))}
               </p>
               {revealed ? (
-                <p className="secrets-reveal-badge mt-[8px] inline-flex w-fit items-center gap-[6px] rounded-full bg-violet-600 px-[10px] py-[3px] text-[12px] font-black uppercase tracking-widest text-white">
+                <p className="secrets-reveal-badge mt-[clamp(.35rem,.8vw,.6rem)] inline-flex w-fit items-center gap-[6px] rounded-full bg-violet-600 px-[10px] py-[3px] text-[clamp(.6rem,.9vw,.78rem)] font-black uppercase tracking-widest text-white">
                   <Unlock size={12} /> {t("secretOut")}
                 </p>
               ) : null}
@@ -327,12 +307,12 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
       </div>
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [playersSig, safePage, cols],
+    [playersSig, safePage],
   );
 
   return (
     <div
-      className="screen-safe fixed inset-0 grid place-items-center overflow-hidden bg-[radial-gradient(circle_at_top_left,#ff83c7,transparent_35%),radial-gradient(circle_at_bottom_right,#a855f7,transparent_40%),#2b0a2d] bg-cover bg-center text-white"
+      className="fixed inset-0 flex flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,#ff83c7,transparent_35%),radial-gradient(circle_at_bottom_right,#a855f7,transparent_40%),#2b0a2d] bg-cover bg-center text-white"
       style={game.background_path ? { backgroundImage: `linear-gradient(rgba(43,10,45,.74),rgba(43,10,45,.86)),url(/api/assets/background/${String(game.public_code)})` } : undefined}
     >
       <style>{`
@@ -406,127 +386,122 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
         </div>
       ) : null}
 
-      {/* Fixed-size stage, scaled to fit one viewport. */}
+      {/* Fluid layout — fills the viewport in fullscreen and maximises the
+          available space when windowed, instead of a fixed stage scaled down. */}
+      <div className="pointer-events-none absolute inset-0 bg-[#160318]/35" />
       <div
-        ref={stageRef}
-        className="relative shrink-0 origin-center"
-        style={{ width: DESIGN_W, height: DESIGN_H, transform: "scale(var(--tv-s, 1))" }}
-      >
-        <div className="pointer-events-none absolute inset-0 bg-[#160318]/45" />
-        <div
-          className="pointer-events-none absolute inset-0 opacity-[0.1]"
-          style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "30px 30px" }}
-        />
+        className="pointer-events-none absolute inset-0 opacity-[0.1]"
+        style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "30px 30px" }}
+      />
 
-        <div className="relative z-10 flex h-full flex-col gap-[20px] p-[40px]">
-          <header className="flex items-start justify-between gap-[24px]">
-            <div className="min-w-0">
-              <p className="tv-text-shadow flex items-center gap-[10px] text-[20px] font-black uppercase tracking-[.22em] text-pink-100">
-                <Eye size={22} /> #{String(game.public_code)}
-              </p>
-              <h1 className="tv-text-shadow display mt-[6px] max-w-[820px] truncate text-[52px] font-black leading-none">
-                {String(game.title)}
-              </h1>
-            </div>
-            <div className="flex shrink-0 gap-[12px]">
-              <button
-                onClick={() => {
-                  ensureAudio();
-                  void document.documentElement.requestFullscreen().catch(() => {});
-                }}
-                className="grid size-[56px] place-items-center rounded-full bg-white/20 ring-1 ring-white/30 backdrop-blur"
-              >
-                <Maximize2 size={26} />
-              </button>
-              <button
-                onClick={() => {
-                  const next = !soundOn;
-                  setSoundOn(next);
-                  if (next) {
-                    ensureAudio();
-                    playBuzzer();
-                  }
-                }}
-                aria-label={t("sound")}
-                aria-pressed={soundOn}
-                className="grid size-[56px] place-items-center rounded-full bg-white/20 ring-1 ring-white/30 backdrop-blur"
-              >
-                {soundOn ? <Volume2 size={26} /> : <VolumeX size={26} />}
-              </button>
-            </div>
-          </header>
-
-          {accusation ? (
-            <div
-              key={accusation.id}
-              className="secrets-spot flex items-center justify-between gap-[24px] overflow-hidden rounded-[24px] border border-rose-200/60 bg-[linear-gradient(120deg,#be123c,#7e22ce)] px-[32px] py-[18px] shadow-[0_18px_50px_rgba(190,18,60,.5)]"
-            >
-              <div className="min-w-0">
-                <p className="tv-text-shadow flex items-center gap-[10px] text-[16px] font-black uppercase tracking-[.22em] text-rose-50">
-                  <Siren size={18} /> {t("accusation")} · {statusLabel(accusation.status)}
-                </p>
-                <p className="tv-text-shadow display mt-[4px] truncate text-[38px] font-black leading-none text-white">
-                  {String(accusation.accuser ?? "?")} <span className="text-rose-100">→</span> {String(accusation.target ?? "?")}
-                </p>
-                <p className="tv-text-shadow mt-[4px] truncate text-[17px] font-semibold text-white/90">
-                  &ldquo;{String(accusation.theory)}&rdquo;
-                </p>
-              </div>
-              {accusationQueue > 0 ? (
-                <span className="shrink-0 rounded-full bg-black/30 px-[18px] py-[8px] text-[16px] font-black uppercase tracking-widest text-white">
-                  {t("queue", { count: accusationQueue })}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div className="grid min-h-0 flex-1 grid-cols-[400px_minmax(0,1fr)] gap-[24px]">
-            <aside className="flex min-h-0 flex-col rounded-[28px] border border-white/25 bg-black/35 p-[32px] backdrop-blur-xl">
-              <p className="tv-text-shadow text-[18px] font-black uppercase tracking-[.2em] text-pink-100">{t("round")}</p>
-              <h2 className="tv-text-shadow display mt-[10px] line-clamp-3 text-[44px] font-black leading-[.98] text-white">
+      <div className="screen-safe relative z-10 flex min-h-0 flex-1 flex-col gap-[clamp(.75rem,2vh,1.5rem)]">
+        <header className="flex items-start justify-between gap-[clamp(1rem,3vw,2.5rem)]">
+          <h1 className="tv-text-shadow display line-clamp-2 min-w-0 text-[clamp(1.75rem,4.4vw,4rem)] font-black leading-[1.02]">
+            {String(game.title)}
+          </h1>
+          <div className="flex shrink-0 items-start gap-[clamp(.5rem,1.5vw,1rem)]">
+            <div className="text-right">
+              <p className="tv-text-shadow text-[clamp(.7rem,1.3vw,1.05rem)] font-black uppercase tracking-[.2em] text-pink-100">
                 {String(round?.title ?? t("waiting"))}
-              </h2>
+              </p>
               {remaining !== null ? (
-                <div className="mt-[20px] flex items-center gap-[14px] text-white">
-                  <Timer size={44} />
-                  <span className="tv-text-shadow display text-[60px] font-black tabular-nums leading-none">
+                <div className="mt-[4px] flex items-center justify-end gap-[clamp(.4rem,1vw,.75rem)] text-white">
+                  <Timer className="size-[clamp(1.4rem,2.6vw,2.4rem)]" />
+                  <span className="tv-text-shadow display text-[clamp(1.9rem,4.4vw,3.75rem)] font-black tabular-nums leading-none">
                     {String(Math.floor(remaining / 60)).padStart(2, "0")}:{String(remaining % 60).padStart(2, "0")}
                   </span>
                 </div>
               ) : null}
-              <div className="flex-1" />
-              {latestEvent ? (
-                <div className="rounded-[20px] bg-white p-[20px] text-[#1f1024]">
-                  <p className="flex items-center gap-[8px] text-[14px] font-black uppercase tracking-widest text-pink-700">
-                    <Sparkles size={16} /> {t("live")}
-                  </p>
-                  <h3 className="display mt-[6px] line-clamp-2 text-[24px] font-black leading-tight">{String(latestEvent.title)}</h3>
-                  <p className="mt-[6px] line-clamp-3 text-[16px] font-medium leading-snug">{String(latestEvent.body ?? "")}</p>
-                </div>
-              ) : null}
-            </aside>
-
-            <article className="flex min-h-0 flex-col rounded-[28px] bg-white p-[28px] text-[#1f1024]">
-              <div className="flex items-baseline justify-between gap-[16px]">
-                <p className="text-[18px] font-black uppercase tracking-[.2em] text-pink-700">{t("balances")}</p>
-                {paginated ? (
-                  <p className="text-[15px] font-black tabular-nums text-pink-400">{safePage + 1}/{pageCount}</p>
-                ) : null}
-              </div>
-              <div className="relative mt-[16px] min-h-0 flex-1">{cardGrid}</div>
-              {paginated ? (
-                <div className="mt-[14px] flex items-center justify-center gap-[8px]">
-                  {Array.from({ length: pageCount }).map((_, i) => (
-                    <span
-                      key={i}
-                      className="h-[8px] rounded-full transition-all duration-500 ease-out"
-                      style={{ width: i === safePage ? 30 : 8, background: i === safePage ? "#db2777" : "#f9d3e6" }}
-                    />
-                  ))}
-                </div>
-              ) : null}
-            </article>
+            </div>
+            <button
+              onClick={() => {
+                ensureAudio();
+                void document.documentElement.requestFullscreen().catch(() => {});
+              }}
+              aria-label={t("fullscreen")}
+              className="grid size-[clamp(40px,4vw,56px)] shrink-0 place-items-center rounded-full bg-white/20 ring-1 ring-white/30 backdrop-blur"
+            >
+              <Maximize2 className="size-1/2" />
+            </button>
+            <button
+              onClick={() => {
+                const next = !soundOn;
+                setSoundOn(next);
+                if (next) {
+                  ensureAudio();
+                  playBuzzer();
+                }
+              }}
+              aria-label={t("sound")}
+              aria-pressed={soundOn}
+              className="grid size-[clamp(40px,4vw,56px)] shrink-0 place-items-center rounded-full bg-white/20 ring-1 ring-white/30 backdrop-blur"
+            >
+              {soundOn ? <Volume2 className="size-1/2" /> : <VolumeX className="size-1/2" />}
+            </button>
           </div>
+        </header>
+
+        {accusation ? (
+          <div
+            key={accusation.id}
+            className="secrets-spot flex items-center justify-between gap-[clamp(1rem,3vw,1.5rem)] overflow-hidden rounded-[24px] border border-rose-200/60 bg-[linear-gradient(120deg,#be123c,#7e22ce)] px-[clamp(1.25rem,3vw,2rem)] py-[clamp(.75rem,1.6vw,1.15rem)] shadow-[0_18px_50px_rgba(190,18,60,.5)]"
+          >
+            <div className="min-w-0">
+              <p className="tv-text-shadow flex items-center gap-[10px] text-[clamp(.7rem,1.1vw,1rem)] font-black uppercase tracking-[.22em] text-rose-50">
+                <Siren className="size-[1em]" /> {t("accusation")} · {statusLabel(accusation.status)}
+              </p>
+              <p className="tv-text-shadow display mt-[4px] truncate text-[clamp(1.5rem,3.4vw,2.4rem)] font-black leading-none text-white">
+                {String(accusation.accuser ?? "?")} <span className="text-rose-100">→</span> {String(accusation.target ?? "?")}
+              </p>
+              <p className="tv-text-shadow mt-[4px] truncate text-[clamp(.85rem,1.4vw,1.1rem)] font-semibold text-white/90">
+                &ldquo;{String(accusation.theory)}&rdquo;
+              </p>
+            </div>
+            {accusationQueue > 0 ? (
+              <span className="shrink-0 rounded-full bg-black/30 px-[clamp(.75rem,1.6vw,1.15rem)] py-[8px] text-[clamp(.8rem,1.1vw,1rem)] font-black uppercase tracking-widest text-white">
+                {t("queue", { count: accusationQueue })}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="grid min-h-0 flex-1 gap-[clamp(.75rem,2vw,1.5rem)] lg:grid-cols-[1fr_2fr]">
+          <aside className="flex min-h-0 flex-col gap-[clamp(.75rem,1.5vw,1rem)] overflow-hidden rounded-[28px] border border-white/25 bg-black/35 p-[clamp(1.25rem,2.5vw,2rem)] backdrop-blur-xl">
+            <p className="tv-text-shadow flex items-center gap-[8px] text-[clamp(.7rem,1.2vw,1rem)] font-black uppercase tracking-[.2em] text-pink-100">
+              <Sparkles className="size-[1em]" /> {t("live")}
+            </p>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {latestEvent ? (
+                <div className="rounded-[20px] bg-white p-[clamp(1rem,1.8vw,1.35rem)] text-[#1f1024]">
+                  <h3 className="display line-clamp-2 text-[clamp(1.15rem,1.9vw,1.6rem)] font-black leading-tight">{String(latestEvent.title)}</h3>
+                  <p className="mt-[6px] line-clamp-4 text-[clamp(.85rem,1.3vw,1.05rem)] font-medium leading-snug">{String(latestEvent.body ?? "")}</p>
+                </div>
+              ) : (
+                <p className="tv-text-shadow text-[clamp(.85rem,1.3vw,1.05rem)] font-semibold text-white/70">{t("waiting")}</p>
+              )}
+            </div>
+          </aside>
+
+          <article className="flex min-h-0 flex-col rounded-[28px] bg-white p-[clamp(1.25rem,2.2vw,1.75rem)] text-[#1f1024]">
+            <div className="flex items-baseline justify-between gap-[16px]">
+              <p className="text-[clamp(.7rem,1.2vw,1rem)] font-black uppercase tracking-[.2em] text-pink-700">{t("balances")}</p>
+              {paginated ? (
+                <p className="text-[clamp(.75rem,1vw,.95rem)] font-black tabular-nums text-pink-400">{safePage + 1}/{pageCount}</p>
+              ) : null}
+            </div>
+            <div className="relative mt-[clamp(.75rem,1.5vw,1rem)] min-h-0 flex-1">{cardGrid}</div>
+            {paginated ? (
+              <div className="mt-[14px] flex items-center justify-center gap-[8px]">
+                {Array.from({ length: pageCount }).map((_, i) => (
+                  <span
+                    key={i}
+                    className="h-[8px] rounded-full transition-all duration-500 ease-out"
+                    style={{ width: i === safePage ? 30 : 8, background: i === safePage ? "#db2777" : "#f9d3e6" }}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </article>
         </div>
       </div>
     </div>
