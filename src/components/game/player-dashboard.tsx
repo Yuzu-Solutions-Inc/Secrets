@@ -14,7 +14,8 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useActionState } from "react";
+import { useFormStatus } from "react-dom";
 import { useTranslations } from "next-intl";
 
 import {
@@ -69,7 +70,12 @@ export function PlayerDashboard(props: Props) {
   const t = useTranslations("play");
   const router = useRouter();
   const [modal, setModal] = useState<"accuse" | "hint" | "secret" | null>(null);
+  const [secretState, submitSecretAction] = useActionState(submitSecret, { success: false, error: null });
   const targets = useMemo(() => props.players.filter((player) => player.id !== props.playerId), [props.players, props.playerId]);
+
+  useEffect(() => {
+    if (secretState.success) setModal(null);
+  }, [secretState]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -350,13 +356,16 @@ export function PlayerDashboard(props: Props) {
               <button onClick={() => setModal(null)} className="grid size-11 place-items-center rounded-full bg-pink-50"><X /></button>
             </div>
             {modal === "secret" ? (
-              <form action={submitSecret} className="mt-5 space-y-4">
+              <form action={submitSecretAction} className="mt-5 space-y-4">
                 <input type="hidden" name="locale" value={props.locale} />
                 <input type="hidden" name="gameId" value={props.game.id} />
                 <input type="hidden" name="playerId" value={props.playerId} />
                 <textarea name="value" className="field min-h-32" maxLength={500} required placeholder="I once…" />
                 <p className="text-xs text-[var(--muted)]">Only you and game admins can see this before it is revealed.</p>
-                <button className="pill pill-primary w-full"><LockKeyhole size={18} /> Save privately</button>
+                {secretState.error ? (
+                  <p role="alert" className="text-sm font-semibold text-red-600">{secretState.error}</p>
+                ) : null}
+                <SaveSecretButton />
               </form>
             ) : (
               <form action={modal === "accuse" ? accusationBuzz : buyHint} className="mt-5 space-y-4">
@@ -381,5 +390,19 @@ export function PlayerDashboard(props: Props) {
         <Bell size={18} className="text-pink-600" />
       </div>
     </section>
+  );
+}
+
+function SaveSecretButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      className="pill pill-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
+      type="submit"
+      disabled={pending}
+      aria-busy={pending}
+    >
+      <LockKeyhole size={18} /> {pending ? "Saving…" : "Save privately"}
+    </button>
   );
 }
