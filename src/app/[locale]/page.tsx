@@ -24,7 +24,7 @@ export default async function LandingPage({
         </a>
       </nav>
 
-      <section className="grid min-h-[78dvh] items-center gap-12 py-16 lg:grid-cols-[1.1fr_.9fr]">
+      <section className="grid min-h-[78dvh] items-center gap-12 overflow-x-clip py-16 lg:grid-cols-[1.1fr_.9fr]">
         <div>
           <p className="mb-4 font-extrabold uppercase tracking-[.16em] text-pink-600">
             <Sparkles className="mr-2 inline" size={18} />

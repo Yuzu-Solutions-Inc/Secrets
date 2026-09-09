@@ -82,7 +82,7 @@ export default async function GamePage({
       {isAdmin ? (
         <div className="mx-auto mb-4 flex max-w-3xl items-center justify-between gap-4 rounded-2xl bg-pink-50 px-5 py-3">
           <p className="text-sm font-semibold text-pink-800">
-            You're hosting this game.
+            You&apos;re hosting this game.
           </p>
           <a
             href={`/${locale}/games/${id}/host`}
