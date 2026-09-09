@@ -289,17 +289,26 @@ export async function setDilemmaChoice(formData: FormData) {
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
 }
 
-// A player's answer to a broadcast dilemma (item 14). Upserts their single
-// row in game_event_responses; the host reads the stack.
-export async function submitDilemmaChoice(formData: FormData) {
+// A player's answer to a broadcast dilemma. Upserts their single row in
+// game_event_responses; on Accept, the dilemma's effects are applied
+// automatically. The host reads the Accept/Refuse tally.
+export async function respondToDilemma(formData: FormData) {
   const parsed = z.object({
     gameId: z.string().uuid(),
     eventId: z.string().uuid(),
     playerId: z.string().uuid(),
-    choice: z.enum(["option_1", "option_2"]),
+    choice: z.enum(["accept", "refuse"]),
     locale: localeSchema,
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
+
+  const { data: prior } = await supabase
+    .from("game_event_responses")
+    .select("choice")
+    .eq("game_event_id", parsed.eventId)
+    .eq("player_id", parsed.playerId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("game_event_responses")
     .upsert(
@@ -307,6 +316,16 @@ export async function submitDilemmaChoice(formData: FormData) {
       { onConflict: "game_event_id,player_id" },
     );
   if (error) throw new Error(error.message);
+
+  // Fire effects the first time this player accepts. The RPC is itself
+  // idempotent, so a re-accept is harmless.
+  if (parsed.choice === "accept" && prior?.choice !== "accept") {
+    const { error: effectError } = await supabase.rpc("apply_dilemma_effects", {
+      p_event_id: parsed.eventId,
+      p_player_id: parsed.playerId,
+    });
+    if (effectError) throw new Error(effectError.message);
+  }
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
 }
 

@@ -99,6 +99,49 @@ export const winnerFormulaSchema = z.object({
   voteBonus: z.number().int().nonnegative().default(0),
 });
 
+// Broadcast dilemma effects: the host stacks these on a dilemma, and they are
+// applied automatically when a player taps Accept (`apply_dilemma_effects`).
+// `cash.amount` is whole currency in the form; `publishDilemma` stores it in
+// cents in the event payload.
+export const dilemmaEffectSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("cash"),
+    direction: z.enum(["gain", "loss"]),
+    amount: z.number().int().positive().max(100_000_000),
+  }),
+  z.object({
+    type: z.literal("free_hint"),
+    recipients: z.enum(["responder", "all"]),
+    aboutPlayerId: z.string().uuid().nullable().optional(),
+  }),
+  z.object({
+    type: z.literal("free_buzz"),
+    recipients: z.enum(["responder", "all"]),
+  }),
+  z.object({
+    type: z.literal("buzz_immunity"),
+    recipients: z.enum(["responder", "all"]),
+    minutes: z.number().int().positive().max(180),
+  }),
+]);
+export type DilemmaEffect = z.infer<typeof dilemmaEffectSchema>;
+
+export const dilemmaEffectsSchema = z.array(dilemmaEffectSchema).max(6);
+
+export function summarizeDilemmaEffect(effect: DilemmaEffect): string {
+  const who = "recipients" in effect && effect.recipients === "all" ? "everyone" : "the accepter";
+  switch (effect.type) {
+    case "cash":
+      return `${effect.direction === "gain" ? "Give" : "Take"} $${effect.amount} ${effect.direction === "gain" ? "to" : "from"} the accepter`;
+    case "free_hint":
+      return `Free hint for ${who}`;
+    case "free_buzz":
+      return `Free buzz for ${who}`;
+    case "buzz_immunity":
+      return `Buzz immunity for ${who} (${effect.minutes} min)`;
+  }
+}
+
 export function calculateFinalScore(
   input: {
     balance: number;

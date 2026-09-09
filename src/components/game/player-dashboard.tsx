@@ -24,7 +24,7 @@ import {
   buyHint,
   createHintOffer,
   setDilemmaChoice,
-  submitDilemmaChoice,
+  respondToDilemma,
   savePlayerNote,
   saveHouseNote,
   submitHouseTheory,
@@ -116,7 +116,8 @@ type Props = {
   houseAccusationOpen: boolean;
   activeBuzzes: Array<Record<string, unknown>>;
   vault: Record<string, unknown> | null;
-  dilemmas?: Array<{ id: string; prompt: string; option1: string; option2: string; myChoice: string | null }>;
+  dilemmas?: Array<{ id: string; prompt: string; myChoice: "accept" | "refuse" | null }>;
+  perks?: Array<{ id: string; kind: string; uses: number; expiresAt: string | null }>;
   latestBroadcast?: { id: string; kind: string; title: string; body: string | null } | null;
 };
 
@@ -772,6 +773,8 @@ function MyGame(props: MyGameProps) {
     revealArmed,
     revealing,
   } = props;
+  const [nowMs] = useState(() => Date.now());
+  const activePerks = (props.perks ?? []).filter((p) => !p.expiresAt || Date.parse(p.expiresAt) > nowMs);
 
   return (
     <div className="space-y-5">
@@ -820,27 +823,52 @@ function MyGame(props: MyGameProps) {
         )}
       </div>
 
-      {/* Broadcast dilemmas — pick an option (item 14) */}
+      {activePerks.length ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-pink-100 bg-white p-3">
+          <span className="text-xs font-black uppercase tracking-widest text-pink-600">Perks</span>
+          {activePerks.map((perk) => {
+            const label =
+              perk.kind === "free_hint" ? "Free hint" : perk.kind === "free_buzz" ? "Free buzz" : "Buzz immunity";
+            const detail =
+              perk.kind === "buzz_immunity" && perk.expiresAt
+                ? ` · until ${new Date(perk.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                : perk.uses > 1
+                  ? ` ×${perk.uses}`
+                  : "";
+            return (
+              <span key={perk.id} className="rounded-full bg-pink-50 px-2 py-1 text-xs font-bold text-pink-700">
+                {label}
+                {detail}
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {/* Broadcast dilemmas — Accept or Refuse a one-sentence offer */}
       {(props.dilemmas ?? []).map((dilemma) => (
         <div key={dilemma.id} className="rounded-2xl border border-pink-200 bg-white p-4">
           <div className="flex items-center gap-2 font-black"><ShieldQuestion className="text-pink-600" /> {dilemma.prompt}</div>
           <div className="mt-3 grid grid-cols-2 gap-2">
-            {(["option_1", "option_2"] as const).map((option) => {
-              const label = option === "option_1" ? dilemma.option1 : dilemma.option2;
-              const chosen = dilemma.myChoice === option;
+            {(["accept", "refuse"] as const).map((choice) => {
+              const chosen = dilemma.myChoice === choice;
               return (
-                <form key={option} action={submitDilemmaChoice}>
+                <form key={choice} action={respondToDilemma}>
                   <input type="hidden" name="locale" value={props.locale} />
                   <input type="hidden" name="gameId" value={props.game.id} />
                   <input type="hidden" name="eventId" value={dilemma.id} />
                   <input type="hidden" name="playerId" value={props.playerId} />
-                  <input type="hidden" name="choice" value={option} />
-                  <button className={`pill w-full ${chosen ? "pill-primary" : "pill-secondary"}`}>{label}</button>
+                  <input type="hidden" name="choice" value={choice} />
+                  <button className={`pill w-full capitalize ${chosen ? "pill-primary" : "pill-secondary"}`}>{choice}</button>
                 </form>
               );
             })}
           </div>
-          {dilemma.myChoice ? <p className="mt-2 text-xs font-bold text-[var(--muted)]">Answer locked in — tap again to change it.</p> : null}
+          {dilemma.myChoice ? (
+            <p className="mt-2 text-xs font-bold text-[var(--muted)]">
+              {dilemma.myChoice === "accept" ? "You accepted — any effects have been applied." : "You refused."} Tap again to change it.
+            </p>
+          ) : null}
         </div>
       ))}
 

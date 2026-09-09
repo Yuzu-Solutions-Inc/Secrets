@@ -18,7 +18,6 @@ import {
   Sparkles,
   Trash2,
   UserRoundCheck,
-  UserRoundX,
   Users,
   Vote,
   X,
@@ -30,7 +29,6 @@ import { toast } from "sonner";
 
 import { adjudicateBuzz, hostTransition, stageAccusationBuzz } from "@/app/actions/game";
 import {
-  publishDilemma,
   addHint,
   editHint,
   editSecret,
@@ -40,20 +38,14 @@ import {
   deleteHouseClue,
   releaseHouseClue,
   releaseRandomHouseClue,
-  assignPower,
-  addRound,
   adjustWallet,
   createHouseSecret,
   createMission,
   createTeam,
-  deleteRound,
+  deleteGame,
   deleteTeam,
   setTeamMembers,
-  duplicateRound,
   fillBankSecrets,
-  moveRound,
-  updateRound,
-  publishEvent,
   replaceSecret,
   settleTeamDilemma,
   saveFinaleConfig,
@@ -70,27 +62,27 @@ import { removeFromWhitelist } from "@/app/actions/invitations";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
 import { secretCategories } from "@/lib/game/templates";
-import { powerSeeds } from "@/lib/game/seeds";
 import { Avatar } from "./avatar";
+import { BroadcastComposer } from "./broadcast-composer";
+import { RoundSchedule } from "./round-schedule";
 import { WhitelistManager } from "./whitelist-manager";
 
 type Row = Record<string, unknown>;
 
-// Attendance / elimination toggles for one player card. Calls the server
-// action directly (not via <form>) so a refusal comes back as a value and
-// can be shown in a toast instead of tripping the route error boundary.
+// One reversible Eliminate/Restore toggle per player card (the old "Deactivate"
+// and "Eliminate" buttons were merged — they meant the same thing). Calls the
+// server action directly (not via <form>) so a refusal comes back as a value
+// and can be shown in a toast instead of tripping the route error boundary.
 function PlayerStatusControls({
   locale,
   gameId,
   playerId,
   active,
-  canEliminate,
 }: {
   locale: string;
   gameId: string;
   playerId: string;
   active: boolean;
-  canEliminate: boolean;
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -122,25 +114,13 @@ function PlayerStatusControls({
       <button
         type="button"
         disabled={pending}
-        onClick={() => submit(active ? "inactive" : "active")}
+        onClick={() => submit(active ? "eliminated" : "active")}
         className="grid size-8 place-items-center rounded-full bg-pink-50 text-pink-600 hover:bg-pink-100 disabled:opacity-50"
-        title={active ? "Deactivate — player can't come (reversible)" : "Reactivate player"}
-        aria-label={active ? "Deactivate player" : "Reactivate player"}
+        title={active ? "Eliminate player (reversible)" : "Restore player"}
+        aria-label={active ? "Eliminate player" : "Restore player"}
       >
-        {active ? <UserRoundX size={15} /> : <UserRoundCheck size={15} />}
+        {active ? <Skull size={15} /> : <UserRoundCheck size={15} />}
       </button>
-      {active ? (
-        <button
-          type="button"
-          disabled={pending || !canEliminate}
-          onClick={() => submit("eliminated")}
-          className="grid size-8 place-items-center rounded-full bg-pink-50 text-[var(--muted)] hover:bg-pink-100 disabled:cursor-not-allowed disabled:opacity-40"
-          title={canEliminate ? "Eliminate player" : "Eliminate — start a live elimination round first"}
-          aria-label="Eliminate player"
-        >
-          <Skull size={15} />
-        </button>
-      ) : null}
       <button
         type="button"
         disabled={pending}
@@ -151,6 +131,77 @@ function PlayerStatusControls({
       >
         <Trash2 size={15} />
       </button>
+    </div>
+  );
+}
+
+// Danger zone (Settings tab): permanently delete the whole game. Two-step —
+// a typed confirmation — because the cascade is irreversible. The server action
+// redirects to the games list on success.
+function DeleteGameControls({ locale, gameId, title }: { locale: string; gameId: string; title: string }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [pending, startTransition] = useTransition();
+  const armed = typed.trim() === title.trim();
+
+  const submit = () =>
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("locale", locale);
+      fd.set("gameId", gameId);
+      const res = await deleteGame(fd);
+      if (res?.error) toast.error(res.error);
+    });
+
+  return (
+    <div className="bubble-card grid gap-3 border border-red-200 p-6">
+      <h3 className="font-black text-red-700">Delete this game</h3>
+      <p className="text-sm text-[var(--muted)]">
+        Removes the game and everything in it — players, rounds, secrets, missions, wallets and history. This cannot be undone.
+      </p>
+      {!confirmOpen ? (
+        <button
+          type="button"
+          onClick={() => setConfirmOpen(true)}
+          className="pill w-fit bg-red-500 text-sm text-white hover:bg-red-600"
+        >
+          <Trash2 size={15} /> Delete game
+        </button>
+      ) : (
+        <div className="grid gap-2">
+          <label className="text-xs font-bold">
+            Type the game title (<span className="font-black">{title}</span>) to confirm
+            <input
+              className="field mt-1"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder={title}
+              autoComplete="off"
+            />
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={!armed || pending}
+              onClick={submit}
+              className="pill bg-red-500 text-sm text-white hover:bg-red-600 disabled:opacity-40"
+            >
+              <Trash2 size={15} /> {pending ? "Deleting…" : "Delete permanently"}
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setConfirmOpen(false);
+                setTyped("");
+              }}
+              className="pill pill-secondary text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -194,8 +245,6 @@ export function HostControlRoom({
   const [secretFilter, setSecretFilter] = useState("all");
   const [openSecrets, setOpenSecrets] = useState<Set<string>>(new Set());
   const [editingSecret, setEditingSecret] = useState<string | null>(null);
-  const [openRound, setOpenRound] = useState<string | null>(null);
-  const [broadcastType, setBroadcastType] = useState("announcement");
   const [finaleEntryMode, setFinaleEntryMode] = useState<string>(
     () => String((((game.settings as Row | null)?.finale as Row | undefined)?.entry as Row | undefined)?.mode ?? "all_active"),
   );
@@ -423,7 +472,7 @@ export function HostControlRoom({
                     <span className={`rounded-full px-2 py-1 text-xs font-bold ${
                       !active ? "bg-[var(--muted-bg,#eee)] text-[var(--muted)]" : player.is_ready ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
                     }`}>
-                      {active ? (player.is_ready ? "Ready" : "Waiting") : playStatus === "inactive" ? "Inactive" : playStatus === "spectator" ? "Spectator" : "Eliminated"}
+                      {active ? (player.is_ready ? "Ready" : "Waiting") : playStatus === "spectator" ? "Spectator" : "Eliminated"}
                     </span>
                   </div>
                   <button
@@ -452,7 +501,6 @@ export function HostControlRoom({
                     gameId={String(game.id)}
                     playerId={pid}
                     active={active}
-                    canEliminate={currentRound?.kind === "elimination" && currentRound?.status === "live"}
                   />
                 </article>
               );
@@ -566,139 +614,12 @@ export function HostControlRoom({
         ) : null}
 
         {tab === "rounds" ? (
-          <div className="space-y-4">
-            <form action={addRound} className="bubble-card grid gap-3 p-5 sm:grid-cols-[1fr_11rem_11rem_7rem_auto]">
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="gameId" value={String(game.id)} />
-              <input className="field" name="title" placeholder="Round title" required />
-              <select className="field" name="kind" defaultValue="solo">
-                {["team", "solo", "house_secret", "event", "nomination", "elimination", "finale"].map((kind) => <option key={kind} value={kind}>{kind.replaceAll("_", " ")}</option>)}
-              </select>
-              <select className="field" name="walletMode" defaultValue="personal">
-                <option value="personal">Personal</option>
-                <option value="temporary_team">Temporary team pot</option>
-                <option value="pooled_personal">Pooled balances</option>
-              </select>
-              <input className="field" name="durationMinutes" type="number" min="1" defaultValue="45" required />
-              <button className="pill pill-primary">Add</button>
-            </form>
-            <div className="bubble-card divide-y divide-pink-100 overflow-hidden">
-              {(() => {
-                const currentPos = currentRound ? Number(currentRound.position) : -1;
-                const nextId = rounds
-                  .filter((r) => String(r.status) === "scheduled" && Number(r.position) > currentPos)
-                  .sort((a, b) => Number(a.position) - Number(b.position))[0]?.id;
-                return rounds.map((round, index) => {
-                  const rid = String(round.id);
-                  const status = String(round.status);
-                  const isCurrent = rid === String(game.current_round_id) || status === "live" || status === "paused";
-                  const isFuture = status === "scheduled" && Number(round.position) > currentPos;
-                  const stage = status === "completed"
-                    ? "finished"
-                    : status === "cancelled"
-                      ? "cancelled"
-                      : isCurrent
-                        ? "current"
-                        : rid === nextId
-                          ? "next"
-                          : "upcoming";
-                  const cfg = (round.config ?? {}) as Row;
-                  const editing = openRound === rid;
-                  return (
-                    <div key={rid}>
-                      <div className="flex items-center gap-3 p-4">
-                        <span className="display grid size-9 shrink-0 place-items-center rounded-full bg-pink-100 font-black text-pink-700">{index + 1}</span>
-                        <div className="min-w-0 flex-1">
-                          <h2 className="truncate font-black">{String(round.title)}</h2>
-                          <p className="text-xs text-[var(--muted)]">{String(round.kind).replaceAll("_", " ")} · {Number(cfg.durationMinutes ?? 0)} min</p>
-                        </div>
-                        <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-black ${
-                          stage === "current" ? "bg-emerald-100 text-emerald-800"
-                          : stage === "next" ? "bg-pink-100 text-pink-800"
-                          : stage === "finished" ? "bg-[var(--muted-bg,#eee)] text-[var(--muted)]"
-                          : stage === "cancelled" ? "bg-red-100 text-red-800"
-                          : "bg-white text-[var(--muted)] ring-1 ring-[var(--border)]"
-                        }`}>{stage}</span>
-                        {round.kind === "finale" ? <span className="shrink-0 rounded-full bg-violet-100 px-2 py-1 text-xs font-black text-violet-800">final</span> : null}
-                        <div className="flex shrink-0 gap-1">
-                          {(["up", "down"] as const).map((direction) => (
-                            <form action={moveRound} key={direction}>
-                              <input type="hidden" name="locale" value={locale} />
-                              <input type="hidden" name="gameId" value={String(game.id)} />
-                              <input type="hidden" name="roundId" value={rid} />
-                              <input type="hidden" name="direction" value={direction} />
-                              <button className="grid size-8 place-items-center rounded-full bg-pink-50" aria-label={`Move ${direction}`}>{direction === "up" ? "↑" : "↓"}</button>
-                            </form>
-                          ))}
-                          <form action={duplicateRound}>
-                            <input type="hidden" name="locale" value={locale} />
-                            <input type="hidden" name="gameId" value={String(game.id)} />
-                            <input type="hidden" name="roundId" value={rid} />
-                            <button className="grid size-8 place-items-center rounded-full bg-pink-50" aria-label="Duplicate">＋</button>
-                          </form>
-                          <button type="button" onClick={() => setOpenRound(editing ? null : rid)} className="grid size-8 place-items-center rounded-full bg-pink-50" aria-label="Edit settings" aria-expanded={editing}>⚙</button>
-                        </div>
-                      </div>
-                      {editing ? (
-                        <form action={updateRound} className="grid gap-3 border-t border-pink-100 bg-pink-50/30 p-4 sm:grid-cols-2">
-                          <input type="hidden" name="locale" value={locale} />
-                          <input type="hidden" name="gameId" value={String(game.id)} />
-                          <input type="hidden" name="roundId" value={rid} />
-                          <label className="text-xs font-bold sm:col-span-2">Title
-                            <input className="field mt-1" name="title" defaultValue={String(round.title)} required />
-                          </label>
-                          <label className="text-xs font-bold">Duration (min)
-                            <input className="field mt-1" name="durationMinutes" type="number" min="1" defaultValue={Number(cfg.durationMinutes ?? 45)} required />
-                          </label>
-                          <label className="text-xs font-bold">Wallet mode
-                            <select className="field mt-1" name="walletMode" defaultValue={String(cfg.walletMode ?? "personal")}>
-                              <option value="personal">Personal</option>
-                              <option value="temporary_team">Temporary team pot</option>
-                              <option value="pooled_personal">Pooled balances</option>
-                            </select>
-                          </label>
-                          <label className="text-xs font-bold">Accusation buzz cost
-                            <input className="field mt-1" name="accusationStake" type="number" min="0" defaultValue={Math.round(Number(cfg.accusationStake ?? 0) / 100)} required />
-                          </label>
-                          <label className="text-xs font-bold">Hint cost
-                            <input className="field mt-1" name="hintPrice" type="number" min="0" defaultValue={Math.round(Number(cfg.hintPrice ?? 0) / 100)} required />
-                          </label>
-                          <label className="text-xs font-bold">Correct-buzz transfer %
-                            <input className="field mt-1" name="correctTransferPercent" type="number" min="0" max="100" defaultValue={Number(cfg.correctTransferPercent ?? 50)} required />
-                          </label>
-                          <label className="text-xs font-bold">Hint visibility
-                            <select className="field mt-1" name="hintVisibility" defaultValue={String(cfg.hintVisibility ?? "private")}>
-                              <option value="private">Private</option><option value="team">Team</option><option value="public">Public</option>
-                            </select>
-                          </label>
-                          <label className="text-xs font-bold">Completes on
-                            <select className="field mt-1" name="completion" defaultValue={String(cfg.completion ?? "manual")}>
-                              <option value="manual">Manual</option><option value="timer">Timer</option><option value="all_submitted">All submitted</option>
-                            </select>
-                          </label>
-                          <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" name="accusationBuzzEnabled" defaultChecked={cfg.accusationBuzzEnabled !== false} /> Accusation buzz enabled</label>
-                          <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" name="hintBuzzEnabled" defaultChecked={cfg.hintBuzzEnabled !== false} /> Hint buzz enabled</label>
-                          <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
-                            <button className="pill pill-primary h-9 text-xs">Save round</button>
-                            {!isFuture ? <span className="text-xs text-[var(--muted)]">Only future rounds can be deleted.</span> : null}
-                          </div>
-                        </form>
-                      ) : null}
-                      {editing && isFuture ? (
-                        <form action={deleteRound} className="border-t border-pink-100 bg-pink-50/30 px-4 pb-4">
-                          <input type="hidden" name="locale" value={locale} />
-                          <input type="hidden" name="gameId" value={String(game.id)} />
-                          <input type="hidden" name="roundId" value={rid} />
-                          <button className="pill h-9 bg-red-500 text-xs text-white">Delete round</button>
-                        </form>
-                      ) : null}
-                    </div>
-                  );
-                });
-              })()}
-              {!rounds.length ? <p className="p-6 text-[var(--muted)]">Add rounds to your custom schedule.</p> : null}
-            </div>
-          </div>
+          <RoundSchedule
+            locale={locale}
+            gameId={String(game.id)}
+            rounds={rounds}
+            currentRoundId={game.current_round_id ? String(game.current_round_id) : null}
+          />
         ) : null}
 
         {tab === "secrets" ? (() => {
@@ -1155,105 +1076,37 @@ export function HostControlRoom({
 
         {tab === "broadcast" ? (
           <div className="space-y-3">
-            <div className="bubble-card p-5">
-              <div className="flex flex-wrap gap-2">
-                {["announcement", "clue", "dilemma", "power"].map((ty) => (
-                  <button key={ty} type="button" onClick={() => setBroadcastType(ty)} className={`pill capitalize ${broadcastType === ty ? "pill-primary" : "pill-secondary"}`}>{ty}</button>
-                ))}
-              </div>
-
-              {broadcastType === "announcement" || broadcastType === "clue" ? (
-                <form action={publishEvent} className="mt-4 grid gap-2">
-                  <input type="hidden" name="locale" value={locale} />
-                  <input type="hidden" name="gameId" value={String(game.id)} />
-                  <input type="hidden" name="kind" value={broadcastType} />
-                  <p className="text-sm text-[var(--muted)]">
-                    {broadcastType === "clue"
-                      ? "A clue — its own dashboard sound and animation. Always public, always for everyone."
-                      : "One line for the whole room, full-screen on the dashboard with sound. Always public."}
-                  </p>
-                  <input className="field" name="title" placeholder={broadcastType === "clue" ? "The clue…" : "The announcement…"} required />
-                  <button className="pill pill-primary w-fit"><Megaphone size={16} /> Broadcast</button>
-                </form>
-              ) : null}
-
-              {broadcastType === "dilemma" ? (
-                <form action={publishDilemma} className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <input type="hidden" name="locale" value={locale} />
-                  <input type="hidden" name="gameId" value={String(game.id)} />
-                  <input className="field sm:col-span-2" name="prompt" placeholder="The dilemma the players face…" required />
-                  <input className="field" name="option1" placeholder="Option 1" required />
-                  <input className="field" name="option2" placeholder="Option 2" required />
-                  <select className="field" name="scope" defaultValue="all">
-                    <option value="all">Everyone</option><option value="team">A team</option><option value="player">One player</option>
-                  </select>
-                  <label className="flex items-center gap-2 font-bold"><input type="checkbox" name="isPublic" /> Show on dashboard</label>
-                  <select className="field" name="teamId" defaultValue="">
-                    <option value="">— team (only if scoped to a team) —</option>
-                    {teams.map((team) => <option key={String(team.id)} value={String(team.id)}>{String(team.name)}</option>)}
-                  </select>
-                  <select className="field" name="playerId" defaultValue="">
-                    <option value="">— player (only if scoped to one) —</option>
-                    {players.map((player) => {
-                      const p = player.profiles as Row | null;
-                      return <option key={String(player.id)} value={String(player.id)}>{String(p?.display_name ?? "Player")}</option>;
-                    })}
-                  </select>
-                  <button className="pill pill-primary w-fit sm:col-span-2">Send dilemma</button>
-                </form>
-              ) : null}
-
-              {broadcastType === "power" ? (
-                <form action={assignPower} className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <input type="hidden" name="locale" value={locale} />
-                  <input type="hidden" name="gameId" value={String(game.id)} />
-                  <select className="field" name="scope" defaultValue="player">
-                    <option value="player">One player</option><option value="team">A team</option><option value="all">Everyone</option>
-                  </select>
-                  <select className="field" name="kind" defaultValue="immunity">
-                    {powerSeeds.map((power) => <option key={power.key} value={power.key}>{power.title[locale === "fr" ? "fr" : "en"]}</option>)}
-                    <option value="other">Other…</option>
-                  </select>
-                  <select className="field" name="playerId" defaultValue="">
-                    <option value="">— player (if scoped to one) —</option>
-                    {players.map((player) => {
-                      const p = player.profiles as Row | null;
-                      return <option key={String(player.id)} value={String(player.id)}>{String(p?.display_name ?? "Player")}</option>;
-                    })}
-                  </select>
-                  <select className="field" name="teamId" defaultValue="">
-                    <option value="">— team (if scoped to a team) —</option>
-                    {teams.map((team) => <option key={String(team.id)} value={String(team.id)}>{String(team.name)}</option>)}
-                  </select>
-                  <input className="field sm:col-span-2" name="kindOther" placeholder="Custom power name (used when kind is Other)" />
-                  <label className="flex items-center gap-2 font-bold"><input type="checkbox" name="isPublic" defaultChecked /> Announce on the dashboard</label>
-                  <button className="pill pill-primary w-fit sm:col-span-2">Grant power</button>
-                </form>
-              ) : null}
-            </div>
+            <BroadcastComposer locale={locale} gameId={String(game.id)} teams={teams} players={players} />
 
             {events.map((event) => {
               const isDilemma = String(event.kind) === "dilemma";
-              const payload = (event.payload ?? {}) as Row;
               const answers = isDilemma ? dilemmaResponses.filter((r) => r.game_event_id === event.id) : [];
-              const c1 = answers.filter((a) => a.choice === "option_1").length;
-              const c2 = answers.filter((a) => a.choice === "option_2").length;
+              const accepted = answers.filter((a) => a.choice === "accept").length;
+              const refused = answers.filter((a) => a.choice === "refuse").length;
+              const effects = (((event.payload ?? {}) as Row).effects ?? []) as Row[];
               return (
                 <article key={String(event.id)} className="bubble-card p-5">
                   <p className="text-xs font-black uppercase tracking-widest text-pink-600">{String(event.kind)}{event.is_public ? "" : " · private"}</p>
                   <h2 className="display mt-1 text-xl font-black">{String(event.title)}</h2>
                   {event.body ? <p className="mt-1 text-sm text-[var(--muted)]">{String(event.body)}</p> : null}
                   {isDilemma ? (
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      <div className="rounded-xl bg-pink-50 p-3">
-                        <p className="text-sm font-bold">{String(payload.option_1 ?? "Option 1")}</p>
-                        <p className="display text-2xl font-black text-pink-700">{c1}</p>
+                    <>
+                      {effects.length ? (
+                        <p className="mt-2 text-xs text-[var(--muted)]">
+                          On accept: {effects.map((e) => String(e.type).replaceAll("_", " ")).join(", ")}
+                        </p>
+                      ) : null}
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <div className="rounded-xl bg-emerald-50 p-3">
+                          <p className="text-sm font-bold text-emerald-800">Accepted</p>
+                          <p className="display text-2xl font-black text-emerald-700">{accepted}</p>
+                        </div>
+                        <div className="rounded-xl bg-pink-50 p-3">
+                          <p className="text-sm font-bold">Refused</p>
+                          <p className="display text-2xl font-black text-pink-700">{refused}</p>
+                        </div>
                       </div>
-                      <div className="rounded-xl bg-pink-50 p-3">
-                        <p className="text-sm font-bold">{String(payload.option_2 ?? "Option 2")}</p>
-                        <p className="display text-2xl font-black text-pink-700">{c2}</p>
-                      </div>
-                    </div>
+                    </>
                   ) : null}
                 </article>
               );
@@ -1512,6 +1365,8 @@ export function HostControlRoom({
             })()}
 
             <a className="pill pill-secondary w-full" href={`/api/games/${String(game.id)}/results`}>Export results CSV</a>
+
+            <DeleteGameControls locale={locale} gameId={String(game.id)} title={String(game.title ?? "this game")} />
           </div>
         ) : null}
 

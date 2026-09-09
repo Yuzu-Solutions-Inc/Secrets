@@ -134,15 +134,28 @@ export default async function GamePage({
         (scope === "team" && myTeamId != null && String(payload.team_id) === myTeamId) ||
         (scope === "player" && String(payload.player_id) === currentPlayer.id);
       if (!targeted) return null;
+      const raw = (myDilemmaResponses ?? []).find((response) => response.game_event_id === event.id)?.choice ?? null;
+      const myChoice = raw === "accept" || raw === "refuse" ? raw : null;
       return {
         id: event.id as string,
         prompt: String(event.title ?? ""),
-        option1: String(payload.option_1 ?? "Option 1"),
-        option2: String(payload.option_2 ?? "Option 2"),
-        myChoice: (myDilemmaResponses ?? []).find((response) => response.game_event_id === event.id)?.choice ?? null,
+        myChoice,
       };
     })
     .filter((dilemma): dilemma is NonNullable<typeof dilemma> => dilemma !== null);
+
+  // Perks this player currently holds (from accepting a dilemma).
+  const { data: perkRows } = await supabase
+    .from("player_grants")
+    .select("id,kind,uses_remaining,expires_at")
+    .eq("player_id", currentPlayer.id)
+    .gt("uses_remaining", 0);
+  const perks = (perkRows ?? []).map((p) => ({
+    id: p.id as string,
+    kind: String(p.kind),
+    uses: Number(p.uses_remaining),
+    expiresAt: (p.expires_at as string | null) ?? null,
+  }));
 
   return (
     <>
@@ -182,6 +195,7 @@ export default async function GamePage({
         activeBuzzes={activeBuzzes ?? []}
         vault={vault && typeof vault === "object" ? vault as Record<string, unknown> : null}
         dilemmas={dilemmas}
+        perks={perks}
         latestBroadcast={
           latestBroadcastRow
             ? {

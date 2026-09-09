@@ -451,6 +451,21 @@ export const playerPowers = pgTable("player_powers", {
   createdAt: timestamps.createdAt,
 });
 
+// Per-player perks handed out when a player Accepts a broadcast dilemma
+// (see the 20260925091000 / 20260925092000 migrations). Consumed in place by
+// buy_next_hint / create_accusation_buzz.
+export const playerGrants = pgTable("player_grants", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  gameId: uuid("game_id").notNull().references(() => games.id, { onDelete: "cascade" }),
+  playerId: uuid("player_id").notNull().references(() => gamePlayers.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  usesRemaining: integer("uses_remaining").notNull().default(1),
+  targetPlayerId: uuid("target_player_id").references(() => gamePlayers.id, { onDelete: "set null" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  source: text("source"),
+  createdAt: timestamps.createdAt,
+}, (table) => [uniqueIndex("player_grants_source_uniq").on(table.source)]);
+
 export const ballots = pgTable("ballots", {
   id: uuid("id").defaultRandom().primaryKey(),
   roundId: uuid("round_id").notNull().references(() => gameRounds.id, { onDelete: "cascade" }),
@@ -496,7 +511,7 @@ export const secretBank = pgTable("secret_bank", {
   uniqueIndex("secret_bank_unique").on(table.category, table.locale, table.text),
 ]);
 
-// One player's answer to a broadcast dilemma (option_1 / option_2). The host
+// One player's answer to a broadcast dilemma (accept / refuse). The host
 // reads every row for their game; a player reads and writes only their own.
 export const gameEventResponses = pgTable("game_event_responses", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -506,5 +521,5 @@ export const gameEventResponses = pgTable("game_event_responses", {
   ...timestamps,
 }, (table) => [
   uniqueIndex("game_event_responses_unique").on(table.gameEventId, table.playerId),
-  check("game_event_response_choice", sql`${table.choice} in ('option_1', 'option_2')`),
+  check("game_event_response_choice", sql`${table.choice} in ('accept', 'refuse')`),
 ]);
