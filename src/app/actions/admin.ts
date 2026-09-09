@@ -507,6 +507,33 @@ export async function setPlayerPlayStatus(formData: FormData) {
   return { error: null };
 }
 
+// Host action: remove a player from the game entirely (and drop their invite so
+// the shared link can't re-admit them). Only works while the player has no game
+// history — otherwise the host is told to deactivate instead.
+export async function removeGamePlayer(formData: FormData) {
+  const parsed = base.extend({
+    playerId: z.string().uuid(),
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("remove_game_player", {
+    p_game_id: parsed.gameId,
+    p_player_id: parsed.playerId,
+  });
+  if (error) {
+    const message =
+      error.message === "forbidden"
+        ? "You don't have permission to remove this player."
+        : error.message === "player_has_activity"
+          ? "This player already has game history — deactivate them instead."
+          : error.message === "not_found"
+            ? "That player is no longer in the game."
+            : error.message;
+    return { error: message };
+  }
+  refresh(parsed.locale, parsed.gameId);
+  return { error: null };
+}
+
 // Host action: give every active player without a secret a random unused entry
 // from the chosen secret bank category (item 21).
 export async function fillBankSecrets(formData: FormData) {

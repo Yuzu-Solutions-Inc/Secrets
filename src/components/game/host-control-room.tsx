@@ -16,6 +16,7 @@ import {
   Skull,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
   UserRoundCheck,
   UserRoundX,
   Users,
@@ -55,11 +56,13 @@ import {
   resolveFinale,
   saveWinnerFormula,
   setPlayerPlayStatus,
+  removeGamePlayer,
   startMission,
   updateGameSettings,
   uploadGameBackground,
   validateMission,
 } from "@/app/actions/admin";
+import { removeFromWhitelist } from "@/app/actions/invitations";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
 import { secretCategories } from "@/lib/game/templates";
@@ -98,6 +101,18 @@ function PlayerStatusControls({
       if (res?.error) toast.error(res.error);
     });
 
+  const remove = () => {
+    if (!window.confirm("Remove this player from the game? This can't be undone.")) return;
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("locale", locale);
+      fd.set("gameId", gameId);
+      fd.set("playerId", playerId);
+      const res = await removeGamePlayer(fd);
+      if (res?.error) toast.error(res.error);
+    });
+  };
+
   return (
     <div className="mt-3 flex items-center gap-2">
       <button
@@ -122,6 +137,16 @@ function PlayerStatusControls({
           <Skull size={15} />
         </button>
       ) : null}
+      <button
+        type="button"
+        disabled={pending}
+        onClick={remove}
+        className="ml-auto grid size-8 place-items-center rounded-full bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50"
+        title="Remove player from the game"
+        aria-label="Remove player from the game"
+      >
+        <Trash2 size={15} />
+      </button>
     </div>
   );
 }
@@ -213,6 +238,17 @@ export function HostControlRoom({
       void supabase.removeChannel(channel);
     };
   }, [game.id, router]);
+
+  // Allow-list emails that have not turned into a joined player yet — shown as
+  // greyed "Invited" cards in the roster so the host can see who is still out.
+  const joinedEmails = new Set(
+    players
+      .map((p) => String((p.profiles as Row | null)?.email ?? "").toLowerCase())
+      .filter(Boolean),
+  );
+  const pendingInvites = (whitelist as { id: string; email: string }[]).filter(
+    (w) => !joinedEmails.has(w.email.toLowerCase()),
+  );
 
   const currentRound = rounds.find((round) => round.id === game.current_round_id);
   // Every hint is sold at the same price — the one set in the base game
@@ -402,6 +438,38 @@ export function HostControlRoom({
                   />
                 </article>
               );
+              })}
+
+              {pendingInvites.map((invite) => {
+                const name = invite.email.split("@")[0];
+                return (
+                  <article key={`invite-${invite.id}`} className="bubble-card border border-dashed border-pink-200 p-5 opacity-80">
+                    <div className="flex items-center gap-3">
+                      <Avatar userId={null} name={name} size={48} />
+                      <div className="min-w-0">
+                        <h2 className="truncate font-black capitalize">{name}</h2>
+                        <p className="truncate text-xs text-[var(--muted)]">{invite.email}</p>
+                      </div>
+                    </div>
+                    <div className="mt-5 flex items-end justify-between">
+                      <p className="text-sm font-bold text-[var(--muted)]">Hasn&apos;t joined yet</p>
+                      <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">Invited</span>
+                    </div>
+                    <form action={removeFromWhitelist} className="mt-3 flex">
+                      <input type="hidden" name="locale" value={locale} />
+                      <input type="hidden" name="gameId" value={String(game.id)} />
+                      <input type="hidden" name="id" value={invite.id} />
+                      <button
+                        type="submit"
+                        className="ml-auto grid size-8 place-items-center rounded-full bg-red-50 text-red-600 hover:bg-red-100"
+                        title="Cancel this invite"
+                        aria-label={`Cancel invite for ${invite.email}`}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </form>
+                  </article>
+                );
               })}
             </div>
 
