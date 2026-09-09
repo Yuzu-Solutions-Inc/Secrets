@@ -58,11 +58,13 @@ Open `http://localhost:3000/fr` or `/en`.
 
 - `NEXT_PUBLIC_SUPABASE_URL`: public project URL
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: browser-safe publishable key
-- `SUPABASE_SECRET_KEY`: server-only key used by authenticated asset relays
+- `SUPABASE_SECRET_KEY`: server-only key used by authenticated asset relays and the Stripe webhook
 - `DATABASE_URL`: direct Postgres URL for Drizzle tooling
 - `NEXT_PUBLIC_APP_URL`: canonical app origin
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO_PACK`, `STRIPE_PRICE_PRO_UNLIMITED`: billing — see [`docs/BILLING_SETUP.md`](docs/BILLING_SETUP.md)
+- `BILLING_ALERT_WEBHOOK_URL` (optional): POST target for the account-sharing review alert
 
-`SUPABASE_SECRET_KEY` and `DATABASE_URL` must never use a `NEXT_PUBLIC_` prefix.
+`SUPABASE_SECRET_KEY`, `DATABASE_URL` and every `STRIPE_*` value must never use a `NEXT_PUBLIC_` prefix.
 
 ## Security model
 

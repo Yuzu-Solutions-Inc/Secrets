@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { roundConfigSchema, winnerFormulaSchema } from "@/lib/game/rules";
+import { assertMissionAllowed, assertProFeature } from "@/lib/billing/guard";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -28,6 +29,9 @@ export async function addRound(formData: FormData) {
     durationMinutes: z.coerce.number().int().positive().max(1440),
     walletMode: z.enum(["temporary_team", "pooled_personal", "personal"]),
   }).parse(Object.fromEntries(formData));
+  if (["event", "nomination", "elimination"].includes(parsed.kind)) {
+    await assertProFeature(parsed.gameId, "advancedRounds");
+  }
   const supabase = await createClient();
   const { count } = await supabase.from("game_rounds").select("id", { count: "exact", head: true }).eq("game_id", parsed.gameId);
   const config = roundConfigSchema.parse({
@@ -120,6 +124,11 @@ export async function createMission(formData: FormData) {
     teamId: z.string().uuid().optional().or(z.literal("")),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
+  const { count: missionCount } = await supabase
+    .from("missions")
+    .select("id", { count: "exact", head: true })
+    .eq("game_id", parsed.gameId);
+  await assertMissionAllowed(parsed.gameId, parsed.visibility, missionCount ?? 0);
   const { data: mission, error } = await supabase.from("missions").insert({
     game_id: parsed.gameId,
     title: parsed.title,
@@ -190,6 +199,7 @@ export async function addImageHint(formData: FormData) {
     price: z.coerce.number().int().min(0),
   }).parse(Object.fromEntries(formData));
   const file = checkedImage(formData.get("image"));
+  await assertProFeature(parsed.gameId, "imageHints");
   const supabase = await createClient();
   const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
   if (!allowed) throw new Error("forbidden");

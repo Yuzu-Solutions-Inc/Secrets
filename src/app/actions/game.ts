@@ -9,6 +9,7 @@ import { gameFormats, roundTemplates } from "@/lib/game/templates";
 import { roundConfigSchema } from "@/lib/game/rules";
 import { getUser } from "@/lib/auth/session";
 import { setActiveOrganizationId } from "@/lib/auth/active-org";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 const localeSchema = z.enum(["en", "fr"]).default("fr");
@@ -74,54 +75,76 @@ export async function createOrganization(
   redirect(`/${parsed.data.locale}/games`);
 }
 
+const ADVANCED_ROUND_KINDS = new Set(["event", "nomination", "elimination"]);
+
 export async function createGame(formData: FormData) {
+  const checkbox = (name: string) => formData.get(name) === "on";
   const parsed = z.object({
     organizationId: z.string().uuid(),
     title: z.string().trim().min(2).max(100),
     format: z.enum(["quick", "weekend", "custom"]),
     startingCash: z.coerce.number().int().min(0).max(100_000_000),
     locale: localeSchema,
+    tier: z.enum(["free", "pro"]).default("free"),
   }).parse({
     organizationId: formData.get("organizationId"),
     title: formData.get("title"),
     format: formData.get("format"),
     startingCash: formData.get("startingCash"),
     locale: formData.get("locale"),
+    tier: formData.get("tier"),
   });
-  const user = await actor();
+  await actor();
   const supabase = await createClient();
   const code = randomBytes(4).toString("hex").toUpperCase();
-  const { data: game, error } = await supabase
-    .from("games")
-    .insert({
-      organization_id: parsed.organizationId,
-      title: parsed.title,
-      format: parsed.format,
-      starting_cash: parsed.startingCash * 100,
-      public_code: code,
-      created_by: user.id,
-    })
-    .select("id")
-    .single();
-  if (error) throw new Error(error.message);
 
-  await supabase.from("game_players").insert({ game_id: game.id, user_id: user.id });
-  const keys = gameFormats[parsed.format];
+  const isPro = parsed.tier === "pro";
+  const features = {
+    sharedSecrets: isPro && checkbox("feat_sharedSecrets"),
+    secretReplacement: isPro && checkbox("feat_secretReplacement"),
+    imageHints: isPro && checkbox("feat_imageHints"),
+    teamMissions: isPro && checkbox("feat_teamMissions"),
+    publicMissions: isPro && checkbox("feat_publicMissions"),
+    advancedRounds: isPro && checkbox("feat_advancedRounds"),
+  };
+  // create_game() clamps everything server-side; format is only honoured for Pro.
+  const format = isPro ? parsed.format : "quick";
+
+  const { data: gameId, error } = await supabase.rpc("create_game", {
+    p_org: parsed.organizationId,
+    p_title: parsed.title,
+    p_format: format,
+    p_starting_cash: parsed.startingCash * 100,
+    p_locale: parsed.locale,
+    p_code: code,
+    p_requested_tier: parsed.tier,
+    p_features: features,
+  });
+  if (error) {
+    if (error.message.includes("pro_entitlement_required")) {
+      redirect(`/${parsed.locale}/billing?need=pro`);
+    }
+    throw new Error(error.message);
+  }
+
+  const keys = gameFormats[format];
   if (keys.length) {
-    const rows = keys.map((key, position) => {
-      const template = roundTemplates.find((item) => item.key === key)!;
-      return {
-        game_id: game.id,
+    const rows = keys
+      .map((key) => roundTemplates.find((item) => item.key === key)!)
+      .filter((template) => features.advancedRounds || !ADVANCED_ROUND_KINDS.has(template.kind))
+      .map((template, position) => ({
+        game_id: gameId,
         title: template.title[parsed.locale],
         kind: template.kind,
         position,
         config: roundConfigSchema.parse(template.config),
-      };
-    });
-    const { error: roundsError } = await supabase.from("game_rounds").insert(rows);
-    if (roundsError) throw new Error(roundsError.message);
+      }));
+    if (rows.length) {
+      const { error: roundsError } = await supabase.from("game_rounds").insert(rows);
+      if (roundsError) throw new Error(roundsError.message);
+    }
   }
-  redirect(`/${parsed.locale}/games/${game.id}/host`);
+  redirect(`/${parsed.locale}/games/${gameId}/host`);
 }
 
 export type SubmitSecretState = { success: boolean; error: string | null };
@@ -271,9 +294,53 @@ export async function hostTransition(formData: FormData) {
     p_game_id: parsed.gameId,
     p_action: parsed.action,
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.message.includes("pro_entitlement_required")) {
+      redirect(`/${parsed.locale}/billing?need=pro`);
+    }
+    throw new Error(error.message);
+  }
+  if (parsed.action === "next_round") {
+    await maybeNotifyBillingReview(parsed.gameId);
+  }
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`, "layout");
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}/host`, "page");
+}
+
+// Fires an optional outbound alert when a Pro-Unlimited host crosses a
+// game-count milestone (rows are queued by consume_pro_game_start). The
+// billing_review_queue row is the durable record; this is best-effort.
+async function maybeNotifyBillingReview(gameId: string) {
+  // billing_review_queue is service-role only; the host_transition RPC already
+  // authorised this caller as the game admin.
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("billing_review_queue")
+    .select("id, user_id, milestone, pro_games_started")
+    .eq("game_id", gameId)
+    .is("notified_at", null);
+  if (!data?.length) return;
+
+  const webhookUrl = process.env.BILLING_ALERT_WEBHOOK_URL;
+  for (const row of data) {
+    if (webhookUrl) {
+      try {
+        await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            text: `Secrets billing review: host ${row.user_id} started their ${row.milestone}th Pro game (total ${row.pro_games_started}). Check billing_review_queue for possible account sharing.`,
+            gameId,
+            userId: row.user_id,
+            milestone: row.milestone,
+          }),
+        });
+      } catch {
+        // Best-effort only — the queue row stays for manual review.
+      }
+    }
+    await admin.from("billing_review_queue").update({ notified_at: new Date().toISOString() }).eq("id", row.id);
+  }
 }
 
 export async function adjudicateBuzz(formData: FormData) {

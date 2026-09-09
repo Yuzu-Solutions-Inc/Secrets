@@ -450,3 +450,48 @@ export const auditEvents = pgTable("audit_events", {
   metadata: jsonb("metadata").notNull().default({}),
   createdAt: timestamps.createdAt,
 });
+
+// Billing — one row per host user. Written only by SECURITY DEFINER functions
+// (create_game, host_transition, apply_purchase, …) or the service role; see
+// supabase/migrations/20260914090000_billing_and_paywall.sql.
+export const entitlements = pgTable("entitlements", {
+  userId: uuid("user_id").primaryKey().references(() => profiles.id, { onDelete: "cascade" }),
+  plan: text("plan").notNull().default("free"),
+  proCredits: integer("pro_credits").notNull().default(0),
+  proExpiresAt: timestamp("pro_expires_at", { withTimezone: true }),
+  freeProGameUsed: boolean("free_pro_game_used").notNull().default(false),
+  proGamesStarted: integer("pro_games_started").notNull().default(0),
+  stripeCustomerId: text("stripe_customer_id").unique(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const purchases = pgTable("purchases", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").references(() => profiles.id, { onDelete: "set null" }),
+  sku: text("sku").notNull(),
+  stripeCheckoutSessionId: text("stripe_checkout_session_id").unique(),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  amountTotal: integer("amount_total"),
+  currency: text("currency"),
+  creditsGranted: integer("credits_granted").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdAt: timestamps.createdAt,
+});
+
+export const billingEvents = pgTable("billing_events", {
+  id: text("id").primaryKey(),
+  type: text("type"),
+  payload: jsonb("payload").notNull().default({}),
+  receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const billingReviewQueue = pgTable("billing_review_queue", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").references(() => profiles.id, { onDelete: "cascade" }),
+  gameId: uuid("game_id").references(() => games.id, { onDelete: "set null" }),
+  milestone: integer("milestone").notNull(),
+  proGamesStarted: integer("pro_games_started").notNull(),
+  notifiedAt: timestamp("notified_at", { withTimezone: true }),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  createdAt: timestamps.createdAt,
+});

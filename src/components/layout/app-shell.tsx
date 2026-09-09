@@ -1,4 +1,4 @@
-import { Eye, Gamepad2, LogOut, Plus, Settings2 } from "lucide-react";
+import { Crown, Eye, Gamepad2, LogOut, Plus, Settings2 } from "lucide-react";
 
 import { signOut } from "@/app/actions/auth";
 
@@ -21,6 +21,9 @@ export function AppShell({
         <div className="flex items-center gap-1">
           <a className="grid size-11 place-items-center rounded-full hover:bg-pink-100" href={`/${locale}/games/new`} aria-label="New game">
             <Plus />
+          </a>
+          <a className="grid size-11 place-items-center rounded-full hover:bg-pink-100" href={`/${locale}/billing`} aria-label="Plans">
+            <Crown />
           </a>
           <a className="grid size-11 place-items-center rounded-full hover:bg-pink-100" href={`/${locale}/profile`} aria-label="Profile">
             <Settings2 />

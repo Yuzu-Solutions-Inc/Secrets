@@ -79,8 +79,10 @@ export function HostControlRoom({
   ledger: Row[];
 }) {
   const t = useTranslations("host");
+  const tg = useTranslations("games");
   const router = useRouter();
   const [tab, setTab] = useState("players");
+  const isFreeTier = (game.settings as { tier?: string } | null)?.tier !== "pro";
 
   // Keep the control room (buzz queue, balances, events) in lock-step with the
   // TV and player dashboards via the shared display_cues refresh signal.
@@ -126,6 +128,14 @@ export function HostControlRoom({
         <div>
           <p className="font-mono text-sm font-black tracking-widest text-pink-600">#{String(game.public_code)} · HOST</p>
           <h1 className="display text-4xl font-black sm:text-5xl">{String(game.title)}</h1>
+          <a
+            href={`/${locale}/billing`}
+            className={`mt-1 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-black uppercase ${
+              isFreeTier ? "bg-pink-100 text-pink-700" : "bg-amber-100 text-amber-700"
+            }`}
+          >
+            {isFreeTier ? tg("tierBadgeFree") : tg("tierBadgePro")}
+          </a>
         </div>
         <a className="pill pill-secondary" target="_blank" href={`/${locale}/display/${String(game.public_code)}`}>
           <MonitorUp size={18} /> {t("display")}

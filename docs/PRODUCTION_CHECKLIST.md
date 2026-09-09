@@ -39,6 +39,18 @@ Live URLs: <https://secrets-game.vercel.app> · Supabase project `fqsqeoxkjedftd
 - [ ] `NEXT_PUBLIC_APP_URL` is `https://secrets-game.vercel.app`.
 - [ ] Production branch is `main`; deploys are green.
 
+## 3b. Billing (Stripe) — see [`BILLING_SETUP.md`](./BILLING_SETUP.md)
+
+- [ ] `20260914090000_billing_and_paywall.sql` applied to production.
+- [ ] Live-mode Stripe products/prices created; `STRIPE_PRICE_PRO_PACK` and
+      `STRIPE_PRICE_PRO_UNLIMITED` set in Vercel.
+- [ ] `STRIPE_SECRET_KEY` (live) and `STRIPE_WEBHOOK_SECRET` set in Vercel;
+      optional `BILLING_ALERT_WEBHOOK_URL` set.
+- [ ] Live webhook endpoint `…/api/stripe/webhook` created for
+      `checkout.session.completed` + `checkout.session.async_payment_succeeded`;
+      a real $5 purchase returns `200` and grants 3 credits (then refund it).
+- [ ] `billing_review_queue` is visible in Studio and someone owns reviewing it.
+
 ## 4. Realtime rehearsal (multi-session)
 
 Run through the full game with at least three browser sessions (one host, two
