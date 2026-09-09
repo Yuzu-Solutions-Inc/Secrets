@@ -310,7 +310,7 @@ export async function submitDilemmaChoice(formData: FormData) {
 export async function hostTransition(formData: FormData) {
   const parsed = z.object({
     gameId: z.string().uuid(),
-    action: z.enum(["lock_secrets", "next_round", "prev_round", "pause", "resume", "finale", "complete"]),
+    action: z.enum(["lock_secrets", "unlock_secrets", "next_round", "prev_round", "pause", "resume", "finale", "complete"]),
     locale: localeSchema,
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();

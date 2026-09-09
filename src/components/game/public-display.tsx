@@ -369,8 +369,8 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
 
   return (
     <div
-      className="fixed inset-0 flex flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,#ff83c7,transparent_35%),radial-gradient(circle_at_bottom_right,#a855f7,transparent_40%),#2b0a2d] bg-cover bg-center text-white"
-      style={game.background_path ? { backgroundImage: `linear-gradient(rgba(43,10,45,.74),rgba(43,10,45,.86)),url(/api/assets/background/${String(game.public_code)})` } : undefined}
+      className="fixed inset-0 flex flex-col overflow-hidden bg-[radial-gradient(circle_at_8%_5%,rgba(255,134,200,.34),transparent_28rem),radial-gradient(circle_at_92%_16%,rgba(190,140,255,.24),transparent_24rem),linear-gradient(160deg,var(--cream),var(--blush))] bg-cover bg-center text-[color:var(--ink)]"
+      style={game.background_path ? { backgroundImage: `linear-gradient(rgba(255,250,252,.86),rgba(255,240,248,.9)),url(/api/assets/background/${String(game.public_code)})` } : undefined}
     >
       <style>{`
         @keyframes secretsAlarmFlash { 0%,100% { opacity: 0 } 8% { opacity: .92 } 55% { opacity: .28 } }
@@ -390,7 +390,7 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
         .secrets-verdict-shake { animation: secretsVerdictIn .5s ease-out both, secretsShake .6s ease-in-out .4s, secretsVerdictOut .6s ease-in 5.6s forwards }
         .secrets-confetti-piece { position: absolute; top: -12vh; border-radius: 2px; animation: secretsConfetti linear forwards }
         .secrets-reveal-badge { animation: secretsRevealPop .5s cubic-bezier(.2,1.6,.35,1) both }
-        .tv-text-shadow { text-shadow: 0 2px 14px rgba(0,0,0,.55), 0 0 2px rgba(0,0,0,.35) }
+        .tv-text-shadow { text-shadow: 0 1px 3px rgba(255,255,255,.7) }
       `}</style>
 
       {/* Full-viewport overlays (outside the scaled stage). */}
@@ -467,26 +467,25 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
 
       {/* Fluid layout — fills the viewport in fullscreen and maximises the
           available space when windowed, instead of a fixed stage scaled down. */}
-      <div className="pointer-events-none absolute inset-0 bg-[#160318]/35" />
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.1]"
-        style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "30px 30px" }}
+        className="pointer-events-none absolute inset-0 opacity-[0.06]"
+        style={{ backgroundImage: "radial-gradient(circle, var(--pink) 1px, transparent 1px)", backgroundSize: "30px 30px" }}
       />
 
       <div className="screen-safe relative z-10 flex min-h-0 flex-1 flex-col gap-[clamp(.75rem,2vh,1.5rem)]">
         <header className="flex items-start justify-between gap-[clamp(1rem,3vw,2.5rem)]">
-          <h1 className="tv-text-shadow display line-clamp-2 min-w-0 text-[clamp(1.75rem,4.4vw,4rem)] font-black leading-[1.02]">
+          <h1 className="tv-text-shadow display line-clamp-2 min-w-0 text-[clamp(1.75rem,4.4vw,4rem)] font-black leading-[1.02] text-[color:var(--ink)]">
             {String(game.title)}
           </h1>
           <div className="flex shrink-0 items-start gap-[clamp(.5rem,1.5vw,1rem)]">
             <div className="text-right">
-              <p className="tv-text-shadow text-[clamp(.7rem,1.3vw,1.05rem)] font-black uppercase tracking-[.2em] text-pink-100">
+              <p className="text-[clamp(.7rem,1.3vw,1.05rem)] font-black uppercase tracking-[.2em] text-pink-600">
                 {String(round?.title ?? t("waiting"))}
               </p>
               {remaining !== null ? (
-                <div className="mt-[4px] flex items-center justify-end gap-[clamp(.4rem,1vw,.75rem)] text-white">
-                  <Timer className="size-[clamp(1.4rem,2.6vw,2.4rem)]" />
-                  <span className="tv-text-shadow display text-[clamp(1.9rem,4.4vw,3.75rem)] font-black tabular-nums leading-none">
+                <div className="mt-[4px] flex items-center justify-end gap-[clamp(.4rem,1vw,.75rem)] text-[color:var(--ink)]">
+                  <Timer className="size-[clamp(1.4rem,2.6vw,2.4rem)] text-pink-500" />
+                  <span className="display text-[clamp(1.9rem,4.4vw,3.75rem)] font-black tabular-nums leading-none">
                     {String(Math.floor(remaining / 60)).padStart(2, "0")}:{String(remaining % 60).padStart(2, "0")}
                   </span>
                 </div>
@@ -498,7 +497,7 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
                 void document.documentElement.requestFullscreen().catch(() => {});
               }}
               aria-label={t("fullscreen")}
-              className="grid size-[clamp(40px,4vw,56px)] shrink-0 place-items-center rounded-full bg-white/20 ring-1 ring-white/30 backdrop-blur"
+              className="grid size-[clamp(40px,4vw,56px)] shrink-0 place-items-center rounded-full bg-white text-[color:var(--ink)] ring-1 ring-[var(--border)] shadow-sm"
             >
               <Maximize2 className="size-1/2" />
             </button>
@@ -513,7 +512,7 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
               }}
               aria-label={t("sound")}
               aria-pressed={soundOn}
-              className="grid size-[clamp(40px,4vw,56px)] shrink-0 place-items-center rounded-full bg-white/20 ring-1 ring-white/30 backdrop-blur"
+              className="grid size-[clamp(40px,4vw,56px)] shrink-0 place-items-center rounded-full bg-white text-[color:var(--ink)] ring-1 ring-[var(--border)] shadow-sm"
             >
               {soundOn ? <Volume2 className="size-1/2" /> : <VolumeX className="size-1/2" />}
             </button>
@@ -545,8 +544,8 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
         ) : null}
 
         <div className="grid min-h-0 flex-1 gap-[clamp(.75rem,2vw,1.5rem)] lg:grid-cols-[1fr_2fr]">
-          <aside className="flex min-h-0 flex-col gap-[clamp(.75rem,1.5vw,1rem)] overflow-hidden rounded-[28px] border border-white/25 bg-black/35 p-[clamp(1.25rem,2.5vw,2rem)] backdrop-blur-xl">
-            <p className="tv-text-shadow flex items-center gap-[8px] text-[clamp(.7rem,1.2vw,1rem)] font-black uppercase tracking-[.2em] text-pink-100">
+          <aside className="flex min-h-0 flex-col gap-[clamp(.75rem,1.5vw,1rem)] overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-[clamp(1.25rem,2.5vw,2rem)] shadow-[var(--shadow)] backdrop-blur-xl">
+            <p className="flex items-center gap-[8px] text-[clamp(.7rem,1.2vw,1rem)] font-black uppercase tracking-[.2em] text-pink-600">
               <Sparkles className="size-[1em]" /> {t("live")}
             </p>
             <div className="flex min-h-0 flex-1 flex-col gap-[clamp(.5rem,1vw,.75rem)] overflow-y-auto">
@@ -557,25 +556,25 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
                   return (
                     <div
                       key={String(event.id)}
-                      className={`rounded-[18px] bg-white p-[clamp(.85rem,1.5vw,1.15rem)] text-[#1f1024] ${index === 0 ? "" : "opacity-75"}`}
+                      className={`rounded-[18px] border border-[var(--border)] bg-[var(--blush)] p-[clamp(.85rem,1.5vw,1.15rem)] text-[color:var(--ink)] ${index === 0 ? "" : "opacity-70"}`}
                     >
-                      <p className="flex items-center gap-[6px] text-[clamp(.6rem,.9vw,.75rem)] font-black uppercase tracking-widest text-pink-700">
+                      <p className="flex items-center gap-[6px] text-[clamp(.6rem,.9vw,.75rem)] font-black uppercase tracking-widest text-pink-600">
                         <Icon size="1em" /> {meta.label}
                       </p>
                       <h3 className="display mt-[4px] line-clamp-2 text-[clamp(1rem,1.7vw,1.4rem)] font-black leading-tight">{String(event.title)}</h3>
-                      {event.body ? <p className="mt-[4px] line-clamp-3 text-[clamp(.8rem,1.2vw,1rem)] font-medium leading-snug">{String(event.body)}</p> : null}
+                      {event.body ? <p className="mt-[4px] line-clamp-3 text-[clamp(.8rem,1.2vw,1rem)] font-medium leading-snug text-[color:var(--muted)]">{String(event.body)}</p> : null}
                     </div>
                   );
                 })
               ) : (
-                <p className="tv-text-shadow text-[clamp(.85rem,1.3vw,1.05rem)] font-semibold text-white/70">{t("waiting")}</p>
+                <p className="text-[clamp(.85rem,1.3vw,1.05rem)] font-semibold text-[color:var(--muted)]">{t("waiting")}</p>
               )}
             </div>
           </aside>
 
-          <article className="flex min-h-0 flex-col rounded-[28px] bg-white p-[clamp(1.25rem,2.2vw,1.75rem)] text-[#1f1024]">
+          <article className="flex min-h-0 flex-col rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-[clamp(1.25rem,2.2vw,1.75rem)] text-[color:var(--ink)] shadow-[var(--shadow)] backdrop-blur-xl">
             <div className="flex items-baseline justify-between gap-[16px]">
-              <p className="text-[clamp(.7rem,1.2vw,1rem)] font-black uppercase tracking-[.2em] text-pink-700">{t("balances")}</p>
+              <p className="text-[clamp(.7rem,1.2vw,1rem)] font-black uppercase tracking-[.2em] text-pink-600">{t("balances")}</p>
               {paginated ? (
                 <p className="text-[clamp(.75rem,1vw,.95rem)] font-black tabular-nums text-pink-400">{safePage + 1}/{pageCount}</p>
               ) : null}

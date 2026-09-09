@@ -374,20 +374,6 @@ export async function replaceSecret(formData: FormData) {
   refresh(parsed.locale, parsed.gameId);
 }
 
-export async function addSecretHolder(formData: FormData) {
-  const parsed = base.extend({
-    secretId: z.string().uuid(),
-    playerId: z.string().uuid(),
-  }).parse(Object.fromEntries(formData));
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("add_secret_holder", {
-    p_secret_id: parsed.secretId,
-    p_player_id: parsed.playerId,
-  });
-  if (error) throw new Error(error.message);
-  refresh(parsed.locale, parsed.gameId);
-}
-
 // The Broadcast section (items 12-18). One entry point, four shapes.
 // "surprise" is gone — it was "announcement" with another label.
 
