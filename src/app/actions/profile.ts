@@ -27,7 +27,13 @@ export async function updateProfile(formData: FormData) {
       .upload(avatarPath, file, { upsert: true, contentType: file.type });
     if (uploadError) throw new Error(uploadError.message);
   }
-  const update: Record<string, string> = { display_name: parsed.displayName, preferred_locale: locale };
+  const update: Record<string, string> = {
+    display_name: parsed.displayName,
+    preferred_locale: locale,
+    // Bump so the avatar <img> cache-buster (?v=updated_at) changes when the
+    // file is replaced at its fixed storage path.
+    updated_at: new Date().toISOString(),
+  };
   if (avatarPath) update.avatar_path = avatarPath;
   const { error } = await supabase.from("profiles").update(update).eq("id", user.id);
   if (error) throw new Error(error.message);

@@ -80,6 +80,11 @@ export function HostControlRoom({
   const t = useTranslations("host");
   const router = useRouter();
   const [tab, setTab] = useState("players");
+  const [openLedgerPlayer, setOpenLedgerPlayer] = useState<string | null>(null);
+
+  // Once the game has started, the invite panel is replaced by the host's
+  // money-correction tools (item 11).
+  const gameStarted = ["live", "finale", "completed", "archived"].includes(String(game.status));
 
   // Keep the control room (buzz queue, balances, events) in lock-step with the
   // TV and player dashboards via the shared display_cues refresh signal.
@@ -118,7 +123,6 @@ export function HostControlRoom({
     ["secrets", t("secrets"), Eye],
     ["buzzes", t("buzzes"), Megaphone],
     ["missions", t("missions"), Sparkles],
-    ["economy", t("economy"), Banknote],
     ["events", t("events"), Shield],
     ["house", "House Secret", Lightbulb],
     ["votes", t("votes"), Vote],
@@ -177,18 +181,41 @@ export function HostControlRoom({
 
       <div className="mt-3">
         {tab === "players" ? (
-          <>
-            <InvitePlayerForm
-              locale={locale}
-              organizationId={String(game.organization_id)}
-              gameId={String(game.id)}
-            />
+          <div className="space-y-4">
+            {gameStarted ? (
+              <form action={adjustWallet} className="bubble-card grid gap-3 p-5 sm:grid-cols-[1fr_8rem_1fr_auto]">
+                <input type="hidden" name="locale" value={locale} />
+                <input type="hidden" name="gameId" value={String(game.id)} />
+                <p className="flex items-center gap-2 text-sm font-bold text-[var(--muted)] sm:col-span-4">
+                  <Banknote size={16} className="text-emerald-600" /> Host money correction — every adjustment is logged with its reason.
+                </p>
+                <select className="field" name="playerId" required defaultValue="">
+                  <option value="" disabled>Player</option>
+                  {players.map((player) => {
+                    const profile = player.profiles as Row | null;
+                    return <option key={String(player.id)} value={String(player.id)}>{String(profile?.display_name ?? "Player")}</option>;
+                  })}
+                </select>
+                <input className="field" name="amount" type="number" placeholder="+ / −" required />
+                <input className="field" name="reason" placeholder="Audit reason" required />
+                <button className="pill pill-primary">Apply</button>
+              </form>
+            ) : (
+              <InvitePlayerForm
+                locale={locale}
+                organizationId={String(game.organization_id)}
+                gameId={String(game.id)}
+              />
+            )}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {players.map((player) => {
               const profile = player.profiles as Row | null;
               const wallets = player.wallets as Row[] | null;
+              const pid = String(player.id);
+              const open = openLedgerPlayer === pid;
+              const tx = open ? playerTransactions(ledger, pid) : [];
               return (
-                <article key={String(player.id)} className="bubble-card p-5">
+                <article key={pid} className="bubble-card p-5">
                   <div className="flex items-center gap-3">
                     <span className="grid size-12 place-items-center rounded-full bg-pink-100 font-black text-pink-700">
                       {String(profile?.display_name ?? "?").slice(0, 1).toUpperCase()}
@@ -204,10 +231,34 @@ export function HostControlRoom({
                       {player.is_ready ? "Ready" : "Waiting"}
                     </span>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setOpenLedgerPlayer(open ? null : pid)}
+                    className="mt-4 flex w-full items-center justify-between text-xs font-bold text-pink-600"
+                    aria-expanded={open}
+                  >
+                    {open ? "Hide transaction history" : "Transaction history"}
+                    <span aria-hidden>{open ? "−" : "+"}</span>
+                  </button>
+                  {open ? (
+                    <ul className="mt-2 space-y-1.5 border-t border-pink-100 pt-2">
+                      {tx.length ? tx.map((row) => (
+                        <li key={row.id} className="flex items-center justify-between gap-2 text-xs">
+                          <span className="min-w-0">
+                            <span className="block truncate font-bold capitalize">{row.label}</span>
+                            <span className="text-[var(--muted)]">{row.direction}</span>
+                          </span>
+                          <span className={`shrink-0 font-black ${row.amount >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            {row.amount >= 0 ? "+" : "−"}{formatMoney(Math.abs(row.amount), String(game.currency_symbol))}
+                          </span>
+                        </li>
+                      )) : <li className="text-xs text-[var(--muted)]">No transactions yet.</li>}
+                    </ul>
+                  ) : null}
                   <form action={setPlayerPlayStatus} className="mt-3">
                     <input type="hidden" name="locale" value={locale} />
                     <input type="hidden" name="gameId" value={String(game.id)} />
-                    <input type="hidden" name="playerId" value={String(player.id)} />
+                    <input type="hidden" name="playerId" value={pid} />
                     <input type="hidden" name="status" value={player.play_status === "eliminated" ? "active" : "eliminated"} />
                     <button className="w-full text-xs font-bold text-[var(--muted)] underline">
                       {player.play_status === "eliminated" ? "Return to active play" : "Eliminate (elimination round only)"}
@@ -217,7 +268,36 @@ export function HostControlRoom({
               );
               })}
             </div>
-          </>
+            <details className="bubble-card overflow-hidden">
+              <summary className="cursor-pointer p-4 font-black">Full ledger &amp; audit</summary>
+              <div className="divide-y divide-pink-100 border-t border-pink-100">
+                {ledger.map((transaction) => {
+                  const entries = (transaction.ledger_entries as Row[] | null) ?? [];
+                  const source = entries.find((entry) => Number(entry.amount) < 0);
+                  const dest = entries.find((entry) => Number(entry.amount) > 0);
+                  const amount = Math.abs(Number(source?.amount ?? dest?.amount ?? 0));
+                  const destWallet = dest?.wallets as Row | null;
+                  const showRecipient = Boolean(destWallet) && String(destWallet?.kind) !== "house";
+                  return (
+                    <div key={String(transaction.id)} className="flex items-center justify-between gap-4 p-4">
+                      <div className="min-w-0">
+                        <p className="truncate font-bold">
+                          {walletLabel(source?.wallets as Row | null)}
+                          {showRecipient ? <span className="text-[var(--muted)]"> → {walletLabel(destWallet)}</span> : null}
+                        </p>
+                        <p className="text-xs text-[var(--muted)]">
+                          {String(transaction.type).replaceAll("_", " ")}
+                          {transaction.reversed_transaction_id ? " · reversal" : ""}
+                        </p>
+                      </div>
+                      <p className="display shrink-0 font-black">{formatMoney(amount, String(game.currency_symbol))}</p>
+                    </div>
+                  );
+                })}
+                {!ledger.length ? <p className="p-5 text-[var(--muted)]">No transactions yet.</p> : null}
+              </div>
+            </details>
+          </div>
         ) : null}
 
         {tab === "rounds" ? (
@@ -557,56 +637,6 @@ export function HostControlRoom({
           </div>
         ) : null}
 
-        {tab === "economy" ? (
-          <div className="space-y-4">
-            <div className="bubble-card p-6">
-              <Banknote className="text-emerald-600" />
-              <h2 className="display mt-4 text-3xl font-black">Immutable game ledger</h2>
-              <p className="mt-2 max-w-xl text-[var(--muted)]">Mission rewards, buzzes, hint sales, team dilemmas and host corrections are recorded as balanced transactions. Direct player-to-player cash transfers are disabled.</p>
-            </div>
-            <form action={adjustWallet} className="bubble-card grid gap-3 p-5 sm:grid-cols-[1fr_8rem_1fr_auto]">
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="gameId" value={String(game.id)} />
-              <select className="field" name="playerId" required defaultValue="">
-                <option value="" disabled>Player</option>
-                {players.map((player) => {
-                  const profile = player.profiles as Row | null;
-                  return <option key={String(player.id)} value={String(player.id)}>{String(profile?.display_name ?? "Player")}</option>;
-                })}
-              </select>
-              <input className="field" name="amount" type="number" placeholder="+ / -" required />
-              <input className="field" name="reason" placeholder="Audit reason" required />
-              <button className="pill pill-primary">Apply</button>
-            </form>
-            <div className="bubble-card divide-y divide-pink-100 overflow-hidden">
-              {ledger.map((transaction) => {
-                const entries = (transaction.ledger_entries as Row[] | null) ?? [];
-                const source = entries.find((entry) => Number(entry.amount) < 0);
-                const dest = entries.find((entry) => Number(entry.amount) > 0);
-                const amount = Math.abs(Number(source?.amount ?? dest?.amount ?? 0));
-                const destWallet = dest?.wallets as Row | null;
-                const showRecipient = Boolean(destWallet) && String(destWallet?.kind) !== "house";
-                return (
-                  <div key={String(transaction.id)} className="flex items-center justify-between gap-4 p-4">
-                    <div className="min-w-0">
-                      <p className="truncate font-bold">
-                        {walletLabel(source?.wallets as Row | null)}
-                        {showRecipient ? <span className="text-[var(--muted)]"> → {walletLabel(destWallet)}</span> : null}
-                      </p>
-                      <p className="text-xs text-[var(--muted)]">
-                        {String(transaction.type).replaceAll("_", " ")}
-                        {transaction.reversed_transaction_id ? " · reversal" : ""}
-                      </p>
-                    </div>
-                    <p className="display shrink-0 font-black">{formatMoney(amount, String(game.currency_symbol))}</p>
-                  </div>
-                );
-              })}
-              {!ledger.length ? <p className="p-5 text-[var(--muted)]">No transactions yet.</p> : null}
-            </div>
-          </div>
-        ) : null}
-
         {tab === "events" ? (
           <div className="space-y-3">
             <form action={publishEvent} className="bubble-card grid gap-3 p-5 sm:grid-cols-[10rem_1fr_auto]">
@@ -714,6 +744,28 @@ function walletLabel(wallet: Row | null | undefined) {
   const team = wallet.teams as Row | null;
   if (team?.name) return `${String(team.name)} (team)`;
   return "Unknown";
+}
+
+// One player's slice of the shared ledger: the signed entry on their own
+// wallet plus who the balancing entry belongs to (item 10 — replaces the
+// standalone Economy tab).
+function playerTransactions(ledger: Row[], playerId: string) {
+  return ledger.flatMap((transaction) => {
+    const entries = (transaction.ledger_entries as Row[] | null) ?? [];
+    const mine = entries.find((entry) => String((entry.wallets as Row | null)?.player_id) === playerId);
+    if (!mine) return [];
+    const other = entries.find((entry) => entry !== mine);
+    const amount = Number(mine.amount);
+    const counterparty = walletLabel((other?.wallets as Row | null) ?? null);
+    return [{
+      id: String(transaction.id),
+      label:
+        String(transaction.type).replaceAll("_", " ") +
+        (transaction.reversed_transaction_id ? " · reversal" : ""),
+      direction: amount >= 0 ? `from ${counterparty}` : `to ${counterparty}`,
+      amount,
+    }];
+  });
 }
 
 function Empty({ icon: Icon, text }: { icon: typeof Lightbulb; text: string }) {

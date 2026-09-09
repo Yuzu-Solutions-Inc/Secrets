@@ -42,7 +42,7 @@ export default async function HostPage({
     supabase.from("secrets").select("*,secret_holders(player_id,game_players(id,profiles(display_name))),hints(id,kind,text,position,default_price,released_at)").eq("game_id", id),
     supabase.from("house_secrets").select("*,house_secret_clues(*)").eq("game_id", id).maybeSingle(),
     supabase.from("teams").select("*,game_rounds!inner(game_id,title),team_members(player_id,game_players(profiles(display_name))),wallets(balance)").eq("game_rounds.game_id", id),
-    supabase.from("ledger_transactions").select("id,type,description,created_at,reversed_transaction_id,ledger_entries(amount,wallets(kind,game_players(profiles(display_name)),teams(name)))").eq("game_id", id).order("created_at", { ascending: false }).limit(30),
+    supabase.from("ledger_transactions").select("id,type,description,created_at,reversed_transaction_id,ledger_entries(amount,wallets(kind,player_id,game_players(profiles(display_name)),teams(name)))").eq("game_id", id).order("created_at", { ascending: false }).limit(50),
   ]);
 
   return (
