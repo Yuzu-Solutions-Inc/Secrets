@@ -407,6 +407,42 @@ export async function savePlayerNote(formData: FormData) {
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
 }
 
+// Upserts (or clears) the caller's private comment on the House Secret. Mirrors
+// savePlayerNote, keyed on the house secret instead of a target player.
+export async function saveHouseNote(formData: FormData) {
+  const parsed = z.object({
+    gameId: z.string().uuid(),
+    playerId: z.string().uuid(),
+    houseSecretId: z.string().uuid(),
+    body: z.string().trim().max(3000),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  if (parsed.body.length === 0) {
+    const { error } = await supabase
+      .from("theory_notes")
+      .delete()
+      .eq("game_id", parsed.gameId)
+      .eq("player_id", parsed.playerId)
+      .eq("target_house_secret_id", parsed.houseSecretId);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase
+      .from("theory_notes")
+      .upsert(
+        {
+          game_id: parsed.gameId,
+          player_id: parsed.playerId,
+          target_house_secret_id: parsed.houseSecretId,
+          body: parsed.body,
+        },
+        { onConflict: "game_id,player_id,target_house_secret_id" },
+      );
+    if (error) throw new Error(error.message);
+  }
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+}
+
 export async function submitMission(formData: FormData) {
   const parsed = z.object({
     gameId: z.string().uuid(),

@@ -31,7 +31,7 @@ export default async function GamePage({
         .eq("game_id", id),
       supabase
         .from("game_players")
-        .select("id,is_ready")
+        .select("id,is_ready,user_id")
         .eq("game_id", id)
         .eq("user_id", user.id)
         .maybeSingle(),
@@ -97,6 +97,7 @@ export default async function GamePage({
         locale={locale}
         game={game}
         playerId={currentPlayer.id}
+        currentUserId={user.id}
         players={(players ?? []).map((player) => ({
           ...player,
           profiles: Array.isArray(player.profiles)
