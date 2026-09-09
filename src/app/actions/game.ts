@@ -110,21 +110,36 @@ export async function createGame(formData: FormData) {
   redirect(`/${parsed.locale}/games/${game.id}/host`);
 }
 
-export async function submitSecret(formData: FormData) {
+export type SubmitSecretState = { success: boolean; error: string | null };
+
+export async function submitSecret(
+  _prevState: SubmitSecretState,
+  formData: FormData,
+): Promise<SubmitSecretState> {
   const parsed = z.object({
     gameId: z.string().uuid(),
     playerId: z.string().uuid(),
     value: z.string().trim().min(3).max(500),
     locale: localeSchema,
-  }).parse(Object.fromEntries(formData));
+  }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { success: false, error: "Your secret needs to be between 3 and 500 characters." };
+  }
   const supabase = await createClient();
   const { error } = await supabase.rpc("submit_player_secret", {
-    p_game_id: parsed.gameId,
-    p_player_id: parsed.playerId,
-    p_value: parsed.value,
+    p_game_id: parsed.data.gameId,
+    p_player_id: parsed.data.playerId,
+    p_value: parsed.data.value,
   });
-  if (error) throw new Error(error.message);
-  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+  if (error) {
+    if (error.message.includes("secrets_locked")) {
+      return { success: false, error: "Secrets are already locked for this game — it's too late to change yours." };
+    }
+    return { success: false, error: "Something went wrong saving your secret. Please try again." };
+  }
+  revalidatePath(`/${parsed.data.locale}/games/${parsed.data.gameId}`);
+  revalidatePath(`/${parsed.data.locale}/games/${parsed.data.gameId}/host`, "page");
+  return { success: true, error: null };
 }
 
 export async function accusationBuzz(formData: FormData) {
@@ -158,6 +173,7 @@ export async function stageAccusationBuzz(formData: FormData) {
   });
   if (error) throw new Error(error.message);
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`, "layout");
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}/host`, "page");
 }
 
 export async function buyHint(formData: FormData) {
@@ -209,6 +225,7 @@ export async function hostTransition(formData: FormData) {
   });
   if (error) throw new Error(error.message);
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`, "layout");
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}/host`, "page");
 }
 
 export async function adjudicateBuzz(formData: FormData) {
@@ -225,6 +242,7 @@ export async function adjudicateBuzz(formData: FormData) {
   });
   if (error) throw new Error(error.message);
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`, "layout");
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}/host`, "page");
 }
 
 export async function createHintOffer(formData: FormData) {
