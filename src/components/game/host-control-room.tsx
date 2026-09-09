@@ -7,11 +7,17 @@ import {
   Eye,
   Lightbulb,
   ListChecks,
+  Lock,
+  LockOpen,
   Megaphone,
   MonitorUp,
   Pause,
+  Pencil,
+  Skull,
   SlidersHorizontal,
   Sparkles,
+  UserRoundCheck,
+  UserRoundX,
   Users,
   Vote,
   X,
@@ -28,7 +34,6 @@ import {
   editSecret,
   deleteHint,
   addHouseClue,
-  addSecretHolder,
   assignPower,
   addRound,
   adjustWallet,
@@ -36,6 +41,8 @@ import {
   createMission,
   createTeam,
   deleteRound,
+  deleteTeam,
+  setTeamMembers,
   duplicateRound,
   fillBankSecrets,
   moveRound,
@@ -44,6 +51,7 @@ import {
   replaceSecret,
   settleTeamDilemma,
   saveFinaleConfig,
+  resolveFinale,
   saveWinnerFormula,
   setPlayerPlayStatus,
   startMission,
@@ -55,7 +63,8 @@ import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
 import { secretCategories } from "@/lib/game/templates";
 import { powerSeeds } from "@/lib/game/seeds";
-import { InvitePlayerForm } from "./invite-player-form";
+import { Avatar } from "./avatar";
+import { WhitelistManager } from "./whitelist-manager";
 
 type Row = Record<string, unknown>;
 
@@ -72,6 +81,8 @@ export function HostControlRoom({
   teams,
   ledger,
   dilemmaResponses = [],
+  whitelist = [],
+  inviteUrl = "",
 }: {
   locale: string;
   game: Row;
@@ -85,6 +96,8 @@ export function HostControlRoom({
   teams: Row[];
   ledger: Row[];
   dilemmaResponses?: { game_event_id: string; choice: string }[];
+  whitelist?: { id: string; email: string }[];
+  inviteUrl?: string;
 }) {
   const t = useTranslations("host");
   const router = useRouter();
@@ -93,6 +106,7 @@ export function HostControlRoom({
   const [secretQuery, setSecretQuery] = useState("");
   const [secretFilter, setSecretFilter] = useState("all");
   const [openSecrets, setOpenSecrets] = useState<Set<string>>(new Set());
+  const [editingSecret, setEditingSecret] = useState<string | null>(null);
   const [openRound, setOpenRound] = useState<string | null>(null);
   const [broadcastType, setBroadcastType] = useState("announcement");
   const [finaleEntryMode, setFinaleEntryMode] = useState<string>(
@@ -101,10 +115,16 @@ export function HostControlRoom({
   const [finaleMethod, setFinaleMethod] = useState<string>(
     () => String((((game.settings as Row | null)?.finale as Row | undefined)?.resolution as Row | undefined)?.method ?? "formula"),
   );
+  const [boxChoices, setBoxChoices] = useState<Record<string, "share" | "steal">>({});
 
   // Once the game has started, the invite panel is replaced by the host's
   // money-correction tools (item 11).
   const gameStarted = ["live", "finale", "completed", "archived"].includes(String(game.status));
+
+  // Secrets lock/unlock pill. The host can flip it freely until round 1 starts
+  // (the game leaves the pre-live statuses); after that the lock is permanent.
+  const secretsLocked = !["draft", "secret_submission"].includes(String(game.status));
+  const canToggleSecrets = ["draft", "secret_submission", "locked"].includes(String(game.status));
 
   // 1s clock for the run-of-show timer.
   const [now, setNow] = useState(() => Date.now());
@@ -151,7 +171,6 @@ export function HostControlRoom({
     ["buzzes", t("buzzes"), Megaphone],
     ["missions", t("missions"), Sparkles],
     ["broadcast", t("broadcast"), Megaphone],
-    ["votes", t("finale"), Vote],
     ["settings", t("settings"), SlidersHorizontal],
   ] as const;
 
@@ -216,12 +235,13 @@ export function HostControlRoom({
                 <button className="pill pill-primary"><CirclePlay size={18} /> {t("nextRound")}</button>
               </form>
             </div>
-            <form action={hostTransition} className="shrink-0">
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="gameId" value={String(game.id)} />
-              <input type="hidden" name="action" value="lock_secrets" />
-              <button className="pill pill-secondary"><Eye size={18} /> {t("lock")}</button>
-            </form>
+            <SecretsLockPill
+              locale={locale}
+              gameId={String(game.id)}
+              locked={secretsLocked}
+              canToggle={canToggleSecrets}
+              className="shrink-0"
+            />
           </div>
         );
       })()}
@@ -257,10 +277,11 @@ export function HostControlRoom({
                 <button className="pill pill-primary">Apply</button>
               </form>
             ) : (
-              <InvitePlayerForm
+              <WhitelistManager
                 locale={locale}
-                organizationId={String(game.organization_id)}
                 gameId={String(game.id)}
+                inviteUrl={inviteUrl}
+                whitelist={whitelist as { id: string; email: string }[]}
               />
             )}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -275,9 +296,11 @@ export function HostControlRoom({
               return (
                 <article key={pid} className={`bubble-card p-5 ${active ? "" : "opacity-70"}`}>
                   <div className="flex items-center gap-3">
-                    <span className="grid size-12 place-items-center rounded-full bg-pink-100 font-black text-pink-700">
-                      {String(profile?.display_name ?? "?").slice(0, 1).toUpperCase()}
-                    </span>
+                    <Avatar
+                      userId={player.user_id ? String(player.user_id) : null}
+                      name={String(profile?.display_name ?? "")}
+                      size={48}
+                    />
                     <div className="min-w-0">
                       <h2 className="truncate font-black">{String(profile?.display_name ?? "Player")}</h2>
                       <p className="truncate text-xs text-[var(--muted)]">{String(profile?.email ?? "")}</p>
@@ -304,25 +327,26 @@ export function HostControlRoom({
                     <ul className="mt-2 space-y-1.5 border-t border-pink-100 pt-2">
                       {tx.length ? tx.map((row) => (
                         <li key={row.id} className="flex items-center justify-between gap-2 text-xs">
-                          <span className="min-w-0">
-                            <span className="block truncate font-bold capitalize">{row.label}</span>
-                            <span className="text-[var(--muted)]">{row.direction}</span>
-                          </span>
+                          <span className="min-w-0 truncate font-bold capitalize">{row.label}</span>
                           <span className={`shrink-0 font-black ${row.amount >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                             {row.amount >= 0 ? "+" : "−"}{formatMoney(Math.abs(row.amount), String(game.currency_symbol))}
                           </span>
                         </li>
-                      )) : <li className="text-xs text-[var(--muted)]">No transactions yet.</li>}
+                      )) : <li className="text-xs text-[var(--muted)]">No movements yet.</li>}
                     </ul>
                   ) : null}
-                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <div className="mt-3 flex items-center gap-2">
                     <form action={setPlayerPlayStatus}>
                       <input type="hidden" name="locale" value={locale} />
                       <input type="hidden" name="gameId" value={String(game.id)} />
                       <input type="hidden" name="playerId" value={pid} />
                       <input type="hidden" name="status" value={active ? "inactive" : "active"} />
-                      <button className="text-xs font-bold text-pink-600 underline">
-                        {active ? "Deactivate (can't come)" : "Reactivate"}
+                      <button
+                        className="grid size-8 place-items-center rounded-full bg-pink-50 text-pink-600 hover:bg-pink-100"
+                        title={active ? "Deactivate — player can't come (reversible)" : "Reactivate player"}
+                        aria-label={active ? "Deactivate player" : "Reactivate player"}
+                      >
+                        {active ? <UserRoundX size={15} /> : <UserRoundCheck size={15} />}
                       </button>
                     </form>
                     {active ? (
@@ -331,7 +355,13 @@ export function HostControlRoom({
                         <input type="hidden" name="gameId" value={String(game.id)} />
                         <input type="hidden" name="playerId" value={pid} />
                         <input type="hidden" name="status" value="eliminated" />
-                        <button className="text-xs font-bold text-[var(--muted)] underline">Eliminate (elimination round)</button>
+                        <button
+                          className="grid size-8 place-items-center rounded-full bg-pink-50 text-[var(--muted)] hover:bg-pink-100"
+                          title="Eliminate — requires a live elimination round"
+                          aria-label="Eliminate player"
+                        >
+                          <Skull size={15} />
+                        </button>
                       </form>
                     ) : null}
                   </div>
@@ -339,35 +369,78 @@ export function HostControlRoom({
               );
               })}
             </div>
-            <details className="bubble-card overflow-hidden">
-              <summary className="cursor-pointer p-4 font-black">Full ledger &amp; audit</summary>
-              <div className="divide-y divide-pink-100 border-t border-pink-100">
-                {ledger.map((transaction) => {
-                  const entries = (transaction.ledger_entries as Row[] | null) ?? [];
-                  const source = entries.find((entry) => Number(entry.amount) < 0);
-                  const dest = entries.find((entry) => Number(entry.amount) > 0);
-                  const amount = Math.abs(Number(source?.amount ?? dest?.amount ?? 0));
-                  const destWallet = dest?.wallets as Row | null;
-                  const showRecipient = Boolean(destWallet) && String(destWallet?.kind) !== "house";
-                  return (
-                    <div key={String(transaction.id)} className="flex items-center justify-between gap-4 p-4">
-                      <div className="min-w-0">
-                        <p className="truncate font-bold">
-                          {walletLabel(source?.wallets as Row | null)}
-                          {showRecipient ? <span className="text-[var(--muted)]"> → {walletLabel(destWallet)}</span> : null}
+
+            <div className="bubble-card p-5">
+              <div className="flex items-center gap-2 font-black"><Users size={18} className="text-pink-600" /> Teams</div>
+              <p className="mt-1 text-sm text-[var(--muted)]">One set of teams for the whole game. Edit membership any time; team rounds use whatever the teams are then.</p>
+              {teams.length ? (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {teams.map((team) => {
+                    const walletRows = team.wallets as Row[] | null;
+                    const memberRows = (team.team_members as Row[] | null) ?? [];
+                    return (
+                      <div key={String(team.id)} className="rounded-2xl bg-pink-50 p-4">
+                        <p className="font-black">{String(team.name)}</p>
+                        <p className="text-sm text-[var(--muted)]">{formatMoney(Number(walletRows?.[0]?.balance ?? 0), String(game.currency_symbol))} · {memberRows.length} member{memberRows.length === 1 ? "" : "s"}</p>
+                        <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                          {memberRows.map((m) => String(((m.game_players as Row | null)?.profiles as Row | null)?.display_name ?? "Player")).join(", ") || "No members"}
                         </p>
-                        <p className="text-xs text-[var(--muted)]">
-                          {String(transaction.type).replaceAll("_", " ")}
-                          {transaction.reversed_transaction_id ? " · reversal" : ""}
-                        </p>
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-xs font-bold text-pink-600">Edit members</summary>
+                          <form action={setTeamMembers} className="mt-2 grid gap-2">
+                            <input type="hidden" name="locale" value={locale} />
+                            <input type="hidden" name="gameId" value={String(game.id)} />
+                            <input type="hidden" name="teamId" value={String(team.id)} />
+                            <div className="grid grid-cols-2 gap-1">
+                              {players.map((player) => {
+                                const profile = player.profiles as Row | null;
+                                const isMember = memberRows.some((m) => String(m.player_id) === String(player.id));
+                                return <label key={String(player.id)} className="rounded-lg bg-white p-1.5 text-xs"><input className="mr-1.5" type="checkbox" name="playerIds" value={String(player.id)} defaultChecked={isMember} />{String(profile?.display_name ?? "Player")}</label>;
+                              })}
+                            </div>
+                            <button className="pill pill-secondary h-8 w-fit text-xs">Save members</button>
+                          </form>
+                        </details>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <form action={settleTeamDilemma}>
+                            <input type="hidden" name="locale" value={locale} />
+                            <input type="hidden" name="gameId" value={String(game.id)} />
+                            <input type="hidden" name="teamId" value={String(team.id)} />
+                            <button className="pill pill-secondary h-8 text-xs">Reveal &amp; settle dilemma</button>
+                          </form>
+                          <form action={deleteTeam}>
+                            <input type="hidden" name="locale" value={locale} />
+                            <input type="hidden" name="gameId" value={String(game.id)} />
+                            <input type="hidden" name="teamId" value={String(team.id)} />
+                            <button className="text-xs font-black text-red-600 hover:underline">Delete</button>
+                          </form>
+                        </div>
                       </div>
-                      <p className="display shrink-0 font-black">{formatMoney(amount, String(game.currency_symbol))}</p>
+                    );
+                  })}
+                </div>
+              ) : null}
+              <details className="mt-3">
+                <summary className="cursor-pointer font-bold">New team</summary>
+                <form action={createTeam} className="mt-3 grid gap-3">
+                  <input type="hidden" name="locale" value={locale} />
+                  <input type="hidden" name="gameId" value={String(game.id)} />
+                  <input className="field" name="name" placeholder="Team name" required />
+                  <input className="field" name="openingCash" type="number" min="0" defaultValue="10000" placeholder="Opening team pot" />
+                  <fieldset>
+                    <legend className="font-bold">Members</legend>
+                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {players.map((player) => {
+                        const profile = player.profiles as Row | null;
+                        return <label key={String(player.id)} className="rounded-xl bg-white p-2 text-sm"><input className="mr-2" type="checkbox" name="playerIds" value={String(player.id)} />{String(profile?.display_name ?? "Player")}</label>;
+                      })}
                     </div>
-                  );
-                })}
-                {!ledger.length ? <p className="p-5 text-[var(--muted)]">No transactions yet.</p> : null}
-              </div>
-            </details>
+                  </fieldset>
+                  <button className="pill pill-primary w-fit">Create team</button>
+                </form>
+              </details>
+            </div>
+
           </div>
         ) : null}
 
@@ -388,49 +461,6 @@ export function HostControlRoom({
               <input className="field" name="durationMinutes" type="number" min="1" defaultValue="45" required />
               <button className="pill pill-primary">Add</button>
             </form>
-            {rounds.some((round) => round.kind === "team") ? (
-              <details className="bubble-card p-5">
-                <summary className="cursor-pointer font-black">Create a team</summary>
-                <form action={createTeam} className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <input type="hidden" name="locale" value={locale} />
-                  <input type="hidden" name="gameId" value={String(game.id)} />
-                  <input className="field" name="name" placeholder="Team name" required />
-                  <select className="field" name="roundId" required>
-                    {rounds.filter((round) => round.kind === "team").map((round) => <option key={String(round.id)} value={String(round.id)}>{String(round.title)}</option>)}
-                  </select>
-                  <input className="field sm:col-span-2" name="openingCash" type="number" min="0" defaultValue="10000" placeholder="Opening team pot" />
-                  <fieldset className="sm:col-span-2">
-                    <legend className="font-bold">Members</legend>
-                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {players.map((player) => {
-                        const profile = player.profiles as Row | null;
-                        return <label key={String(player.id)} className="rounded-xl bg-pink-50 p-3"><input className="mr-2" type="checkbox" name="playerIds" value={String(player.id)} />{String(profile?.display_name ?? "Player")}</label>;
-                      })}
-                    </div>
-                  </fieldset>
-                  <button className="pill pill-primary sm:col-span-2">Create team</button>
-                </form>
-              </details>
-            ) : null}
-            {teams.length ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {teams.map((team) => {
-                  const walletRows = team.wallets as Row[] | null;
-                  return (
-                    <div key={String(team.id)} className="bubble-card p-4">
-                      <p className="font-black">{String(team.name)}</p>
-                      <p className="text-sm text-[var(--muted)]">{formatMoney(Number(walletRows?.[0]?.balance ?? 0), String(game.currency_symbol))}</p>
-                      <form action={settleTeamDilemma} className="mt-3">
-                        <input type="hidden" name="locale" value={locale} />
-                        <input type="hidden" name="gameId" value={String(game.id)} />
-                        <input type="hidden" name="teamId" value={String(team.id)} />
-                        <button className="pill pill-secondary w-full">Reveal & settle dilemma</button>
-                      </form>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
             <div className="bubble-card divide-y divide-pink-100 overflow-hidden">
               {(() => {
                 const currentPos = currentRound ? Number(currentRound.position) : -1;
@@ -563,6 +593,9 @@ export function HostControlRoom({
               return {
                 secret,
                 holderPlayerId: holders[0]?.player_id ? String(holders[0].player_id) : null,
+                holderUserId: (holders[0]?.game_players as Row | null)?.user_id
+                  ? String((holders[0].game_players as Row).user_id)
+                  : null,
                 name: String(profile?.display_name ?? "Player"),
                 hintRows: [...(((secret.hints as Row[] | null) ?? []))].sort((a, b) => Number(a.position) - Number(b.position)),
                 status: String(secret.status),
@@ -592,13 +625,17 @@ export function HostControlRoom({
                 <button type="button" className="pill pill-secondary h-10" onClick={() => setOpenSecrets(allOpen ? new Set() : new Set(allIds))}>
                   {allOpen ? "Collapse all" : "Expand all"}
                 </button>
-                <form action={hostTransition} className="ml-auto">
-                  <input type="hidden" name="locale" value={locale} />
-                  <input type="hidden" name="gameId" value={String(game.id)} />
-                  <input type="hidden" name="action" value="lock_secrets" />
-                  <button className="pill pill-secondary h-10"><Eye size={16} /> Lock all secrets</button>
-                </form>
-                <span className="text-xs font-bold text-[var(--muted)]">{lockedCount}/{secrets.length} locked</span>
+                <SecretsLockPill
+                  locale={locale}
+                  gameId={String(game.id)}
+                  locked={secretsLocked}
+                  canToggle={canToggleSecrets}
+                  className="ml-auto h-10"
+                />
+                <span className="text-xs font-bold text-[var(--muted)]">
+                  {lockedCount}/{secrets.length} locked
+                  {canToggleSecrets ? "" : " · locked for the game"}
+                </span>
               </div>
 
               <details className="bubble-card overflow-hidden" open={!houseSecret}>
@@ -634,7 +671,7 @@ export function HostControlRoom({
               </details>
 
               <div className="bubble-card divide-y divide-pink-100 overflow-hidden">
-                {rows.map(({ secret, name, hintRows, status, holderPlayerId }) => {
+                {rows.map(({ secret, name, hintRows, status, holderPlayerId, holderUserId }) => {
                   const sid = String(secret.id);
                   const open = openSecrets.has(sid);
                   const isDraft = status === "draft";
@@ -654,20 +691,41 @@ export function HostControlRoom({
                         >
                           {open ? "−" : "+"}
                         </button>
-                        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-pink-100 text-sm font-black text-pink-700">{name.slice(0, 1).toUpperCase()}</span>
-                        {isDraft && holderPlayerId ? (
-                          <form action={editSecret} className="flex min-w-0 flex-1 items-center gap-2">
+                        <Avatar userId={holderUserId} name={name} size={36} className="text-sm" />
+                        {editingSecret === sid ? (
+                          <form
+                            action={isDraft && holderPlayerId ? editSecret : replaceSecret}
+                            className="flex min-w-0 flex-1 items-center gap-2"
+                          >
                             <input type="hidden" name="locale" value={locale} />
                             <input type="hidden" name="gameId" value={String(game.id)} />
-                            <input type="hidden" name="playerId" value={holderPlayerId} />
+                            {isDraft && holderPlayerId ? (
+                              <input type="hidden" name="playerId" value={holderPlayerId} />
+                            ) : (
+                              <>
+                                <input type="hidden" name="secretId" value={sid} />
+                                <input type="hidden" name="reason" value="Host edit" />
+                              </>
+                            )}
                             <span className="hidden shrink-0 text-xs font-bold text-pink-600 md:block">{name}</span>
-                            <input className="field h-9 min-w-0 flex-1" name="value" defaultValue={String(secret.value)} required />
+                            <input className="field h-9 min-w-0 flex-1" name="value" defaultValue={String(secret.value)} required autoFocus />
                             <button className="pill pill-secondary h-9 shrink-0 text-xs">Save</button>
+                            <button type="button" onClick={() => setEditingSecret(null)} className="pill h-9 shrink-0 text-xs">Cancel</button>
                           </form>
                         ) : (
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-bold text-pink-600">{name}</p>
-                            <p className="display truncate font-black">{String(secret.value)}</p>
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-bold text-pink-600">{name}</p>
+                              <p className="display truncate font-black">{String(secret.value)}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setEditingSecret(sid)}
+                              className="grid size-8 shrink-0 place-items-center rounded-full text-pink-600 hover:bg-pink-50 hover:text-pink-800"
+                              aria-label={`Edit ${name}'s secret`}
+                            >
+                              <Pencil size={15} />
+                            </button>
                           </div>
                         )}
                         <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-black ${status === "revealed" ? "bg-violet-100 text-violet-800" : status === "locked" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{status}</span>
@@ -678,8 +736,8 @@ export function HostControlRoom({
                           {hintRows.length ? (
                             <ul className="space-y-2">
                               {hintRows.map((hint) => (
-                                <li key={String(hint.id)} className="rounded-2xl bg-white p-3">
-                                  {String(hint.kind) === "text" ? (
+                                <li key={String(hint.id)} className="space-y-2 rounded-2xl bg-white p-3">
+                                  {hint.text ? (
                                     <form action={editHint} className="flex flex-wrap items-center gap-2">
                                       <input type="hidden" name="locale" value={locale} />
                                       <input type="hidden" name="gameId" value={String(game.id)} />
@@ -687,10 +745,11 @@ export function HostControlRoom({
                                       <input className="field h-9 min-w-0 flex-1" name="text" defaultValue={String(hint.text ?? "")} required />
                                       <button className="pill pill-secondary h-9 shrink-0 text-xs">Save</button>
                                     </form>
-                                  ) : (
+                                  ) : null}
+                                  {hint.asset_path ? (
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img src={`/api/assets/hints/${String(hint.id)}`} alt="Image hint" className="max-h-32 rounded-xl" />
-                                  )}
+                                  ) : null}
                                   <div className="mt-1 flex items-center gap-3 text-xs">
                                     <span className="text-[var(--muted)]">#{Number(hint.position) + 1}{hint.released_at ? " · released" : ""}</span>
                                     <form action={deleteHint}>
@@ -715,32 +774,6 @@ export function HostControlRoom({
                             <p className="text-xs text-[var(--muted)] sm:col-span-2">Fill the text, attach an image, or both.</p>
                           </form>
 
-                          <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-                            <form action={addSecretHolder} className="flex gap-2">
-                              <input type="hidden" name="locale" value={locale} />
-                              <input type="hidden" name="gameId" value={String(game.id)} />
-                              <input type="hidden" name="secretId" value={sid} />
-                              <select className="field h-9 w-auto text-xs" name="playerId" required defaultValue="">
-                                <option value="" disabled>Add shared holder…</option>
-                                {players.map((player) => {
-                                  const p = player.profiles as Row | null;
-                                  return <option key={String(player.id)} value={String(player.id)}>{String(p?.display_name ?? "Player")}</option>;
-                                })}
-                              </select>
-                              <button className="pill pill-secondary h-9 shrink-0 text-xs">Add</button>
-                            </form>
-                            <details>
-                              <summary className="cursor-pointer text-xs font-bold text-red-600">Replace with audit</summary>
-                              <form action={replaceSecret} className="mt-2 space-y-2">
-                                <input type="hidden" name="locale" value={locale} />
-                                <input type="hidden" name="gameId" value={String(game.id)} />
-                                <input type="hidden" name="secretId" value={sid} />
-                                <textarea className="field min-h-20" name="value" required defaultValue={String(secret.value)} />
-                                <input className="field h-9" name="reason" required placeholder="Required audit reason" />
-                                <button className="pill h-9 bg-red-500 text-xs text-white">Replace</button>
-                              </form>
-                            </details>
-                          </div>
                         </div>
                       ) : null}
                     </div>
@@ -749,10 +782,16 @@ export function HostControlRoom({
                 {!rows.length ? <p className="p-6 text-center text-[var(--muted)]">{secrets.length ? "No secrets match." : "Players have not submitted secrets yet."}</p> : null}
               </div>
 
-              {missingPlayers.length && (secretFilter === "all" || secretFilter === "no-hints") ? (
-                <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">
-                  {missingPlayers.length} without a secret: {missingPlayers.map((p) => String((p.profiles as Row | null)?.display_name ?? "Player")).join(", ")}. Use <span className="font-bold">Settings → Fill missing secrets</span>.
-                </p>
+              {missingPlayers.length ? (
+                <form action={fillBankSecrets} className="grid gap-2 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">
+                  <input type="hidden" name="locale" value={locale} />
+                  <input type="hidden" name="gameId" value={String(game.id)} />
+                  <p>
+                    <span className="font-bold">{missingPlayers.length} without a secret:</span>{" "}
+                    {missingPlayers.map((p) => String((p.profiles as Row | null)?.display_name ?? "Player")).join(", ")}.
+                  </p>
+                  <button className="pill pill-secondary w-fit"><Sparkles size={16} /> Fill missing secrets</button>
+                </form>
               ) : null}
             </div>
           );
@@ -870,7 +909,9 @@ export function HostControlRoom({
                         {left <= 0 ? "Timer expired" : `Timer: ${String(Math.floor(left / 60)).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`}
                       </p>
                     );
-                  })() : null}
+                  })() : Number(mission.timer_minutes) > 0 && isDraft ? (
+                    <p className="mt-2 text-xs font-black text-[var(--muted)]">Timer: {Number(mission.timer_minutes)} min — starts on Start</p>
+                  ) : null}
                   <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 font-black">
                     <span className="text-emerald-600">Reward +{formatMoney(Number(mission.reward), String(game.currency_symbol))}</span>
                     {penalty > 0 ? (
@@ -1029,8 +1070,64 @@ export function HostControlRoom({
           </div>
         ) : null}
 
-        {tab === "votes" ? (
-          <div className="space-y-3">
+        {tab === "settings" ? (
+          <div className="space-y-4">
+            <form action={updateGameSettings} className="bubble-card grid gap-4 p-6 sm:grid-cols-2">
+              <input type="hidden" name="locale" value={locale} />
+              <input type="hidden" name="gameId" value={String(game.id)} />
+              <div className="sm:col-span-2">
+                <SlidersHorizontal className="text-pink-600" />
+                <h2 className="display mt-3 text-3xl font-black">Game settings</h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">Economy is in whole {String(game.currency_symbol)}. Buzz and hint prices apply to every round.</p>
+              </div>
+              <label className="font-bold">Starting cash
+                <input className="field mt-1" name="startingCash" type="number" min="0" defaultValue={Math.round(Number(game.starting_cash ?? 0) / 100)} required />
+              </label>
+              <label className="font-bold">Accusation buzz cost
+                <input className="field mt-1" name="accusationStake" type="number" min="0" defaultValue={Math.round(settingsAccusationStake / 100)} required />
+              </label>
+              <label className="font-bold">Hint cost
+                <input className="field mt-1" name="hintPrice" type="number" min="0" defaultValue={Math.round(settingsHintPrice / 100)} required />
+              </label>
+              <label className="font-bold">Language
+                <select className="field mt-1" name="language" defaultValue={String(settings.language ?? locale)}>
+                  <option value="fr">Français</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+              <label className="font-bold">Start date &amp; time <span className="font-normal text-[var(--muted)]">(reminder only — the game never starts on its own)</span>
+                <input className="field mt-1" name="startsAt" type="datetime-local" defaultValue={startsAtLocal} />
+              </label>
+              <label className="font-bold">Location
+                <input className="field mt-1" name="location" defaultValue={String(settings.location ?? "")} placeholder="The Pink House, 12 Rose St." />
+              </label>
+              <label className="font-bold">Secret pack
+                <select className="field mt-1" name="secretCategory" defaultValue={String(settings.secretCategory ?? "mixed")}>
+                  {secretCategories.map((category) => (
+                    <option key={category.key} value={category.key}>{category.label[locale === "fr" ? "fr" : "en"]}</option>
+                  ))}
+                </select>
+              </label>
+              <button className="pill pill-primary sm:col-span-2">Save settings</button>
+            </form>
+
+            <form action={fillBankSecrets} className="bubble-card grid gap-2 p-6">
+              <h3 className="font-black">Auto-fill secrets</h3>
+              <p className="text-sm text-[var(--muted)]">Give every active player without a secret one from the chosen pack. Players can still change theirs while submission is open.</p>
+              <input type="hidden" name="locale" value={locale} />
+              <input type="hidden" name="gameId" value={String(game.id)} />
+              <button className="pill pill-secondary w-fit"><Sparkles size={16} /> Fill missing secrets</button>
+            </form>
+
+            <form action={uploadGameBackground} className="bubble-card grid gap-3 p-6">
+              <h3 className="font-black">Dashboard background image</h3>
+              <p className="text-sm text-[var(--muted)]">Shown behind the TV dashboard. PNG, JPEG or WebP.</p>
+              <input type="hidden" name="locale" value={locale} />
+              <input type="hidden" name="gameId" value={String(game.id)} />
+              <input className="field" type="file" name="image" accept="image/png,image/jpeg,image/webp" required />
+              <button className="pill pill-secondary w-fit">Upload background</button>
+            </form>
+
             <form action={saveFinaleConfig} className="bubble-card grid gap-4 p-6">
               <input type="hidden" name="locale" value={locale} />
               <input type="hidden" name="gameId" value={String(game.id)} />
@@ -1117,67 +1214,103 @@ export function HostControlRoom({
               </form>
             ) : null}
 
+            {(() => {
+              const result = (settings.finaleResult ?? null) as Row | null;
+              if (result) {
+                const rows = (result.results as Row[] | null) ?? [];
+                const winnerId = String(result.winnerPlayerId ?? "");
+                return (
+                  <div className="bubble-card p-6">
+                    <h3 className="display text-2xl font-black">Finale result</h3>
+                    <p className="mt-1 text-sm text-[var(--muted)]">Method: {String(result.method)}</p>
+                    <ol className="mt-3 space-y-1">
+                      {rows.map((row, index) => (
+                        <li key={String(row.playerId)} className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm ${String(row.playerId) === winnerId ? "bg-emerald-100 font-black text-emerald-800" : "bg-pink-50"}`}>
+                          <span>{index + 1}. {String(row.name)}{String(row.playerId) === winnerId ? " · winner" : ""}</span>
+                          <span className="tabular-nums text-[var(--muted)]">
+                            {formatMoney(Number(row.balance ?? 0), String(game.currency_symbol))} · {Number(row.score ?? 0)} pts · {Number(row.votes ?? 0)} votes
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                );
+              }
+              if (String(game.status) !== "finale") {
+                return (
+                  <p className="rounded-2xl bg-pink-50 p-4 text-sm text-[var(--muted)]">
+                    Resolving the finale becomes available once the game reaches the finale (advance past the last round in the run-of-show header).
+                  </p>
+                );
+              }
+              const activePlayers = players.filter((p) => String(p.play_status ?? "active") === "active");
+              return (
+                <form
+                  action={resolveFinale}
+                  className="bubble-card grid gap-3 p-6"
+                  onSubmit={(e) => {
+                    if (finaleMethod === "box_exchange") {
+                      const missing = activePlayers.some((p) => !boxChoices[String(p.id)]);
+                      if (missing) {
+                        e.preventDefault();
+                        alert("Pick Share or Steal for every finalist first.");
+                      }
+                    }
+                  }}
+                >
+                  <input type="hidden" name="locale" value={locale} />
+                  <input type="hidden" name="gameId" value={String(game.id)} />
+                  <input type="hidden" name="boxChoices" value={finaleMethod === "box_exchange" ? JSON.stringify(boxChoices) : ""} />
+                  <h3 className="display text-2xl font-black">Resolve the finale</h3>
+                  <p className="text-sm text-[var(--muted)]">
+                    Method <span className="font-bold">{finaleMethod}</span>. Non-finalists become spectators; the game is marked complete. This can only run once.
+                  </p>
+
+                  {finaleMethod === "other" ? (
+                    <label className="text-xs font-bold">Winner
+                      <select className="field mt-1" name="winnerPlayerId" required defaultValue="">
+                        <option value="" disabled>Pick the winner</option>
+                        {activePlayers.map((player) => {
+                          const profile = player.profiles as Row | null;
+                          return <option key={String(player.id)} value={String(player.id)}>{String(profile?.display_name ?? "Player")}</option>;
+                        })}
+                      </select>
+                    </label>
+                  ) : null}
+
+                  {finaleMethod === "box_exchange" ? (
+                    <div className="grid gap-2">
+                      <p className="text-xs font-bold text-[var(--muted)]">Each finalist&apos;s Share / Steal choice</p>
+                      {activePlayers.map((player) => {
+                        const profile = player.profiles as Row | null;
+                        const pid = String(player.id);
+                        return (
+                          <div key={pid} className="flex items-center justify-between gap-3 rounded-xl bg-pink-50 px-3 py-2 text-sm">
+                            <span className="truncate font-bold">{String(profile?.display_name ?? "Player")}</span>
+                            <div className="flex gap-1">
+                              {(["share", "steal"] as const).map((choice) => (
+                                <button
+                                  key={choice}
+                                  type="button"
+                                  onClick={() => setBoxChoices((prev) => ({ ...prev, [pid]: choice }))}
+                                  className={`pill h-8 text-xs ${boxChoices[pid] === choice ? "pill-primary" : "pill-secondary"}`}
+                                >
+                                  {choice}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+
+                  <button className="pill pill-primary w-fit"><Vote size={16} /> Resolve &amp; complete game</button>
+                </form>
+              );
+            })()}
+
             <a className="pill pill-secondary w-full" href={`/api/games/${String(game.id)}/results`}>Export results CSV</a>
-          </div>
-        ) : null}
-
-        {tab === "settings" ? (
-          <div className="space-y-4">
-            <form action={updateGameSettings} className="bubble-card grid gap-4 p-6 sm:grid-cols-2">
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="gameId" value={String(game.id)} />
-              <div className="sm:col-span-2">
-                <SlidersHorizontal className="text-pink-600" />
-                <h2 className="display mt-3 text-3xl font-black">Game settings</h2>
-                <p className="mt-1 text-sm text-[var(--muted)]">Economy is in whole {String(game.currency_symbol)}. Buzz and hint prices apply to every round.</p>
-              </div>
-              <label className="font-bold">Starting cash
-                <input className="field mt-1" name="startingCash" type="number" min="0" defaultValue={Math.round(Number(game.starting_cash ?? 0) / 100)} required />
-              </label>
-              <label className="font-bold">Accusation buzz cost
-                <input className="field mt-1" name="accusationStake" type="number" min="0" defaultValue={Math.round(settingsAccusationStake / 100)} required />
-              </label>
-              <label className="font-bold">Hint cost
-                <input className="field mt-1" name="hintPrice" type="number" min="0" defaultValue={Math.round(settingsHintPrice / 100)} required />
-              </label>
-              <label className="font-bold">Language
-                <select className="field mt-1" name="language" defaultValue={String(settings.language ?? locale)}>
-                  <option value="fr">Français</option>
-                  <option value="en">English</option>
-                </select>
-              </label>
-              <label className="font-bold">Start date &amp; time <span className="font-normal text-[var(--muted)]">(reminder only — the game never starts on its own)</span>
-                <input className="field mt-1" name="startsAt" type="datetime-local" defaultValue={startsAtLocal} />
-              </label>
-              <label className="font-bold">Location
-                <input className="field mt-1" name="location" defaultValue={String(settings.location ?? "")} placeholder="The Pink House, 12 Rose St." />
-              </label>
-              <label className="font-bold">Secret pack
-                <select className="field mt-1" name="secretCategory" defaultValue={String(settings.secretCategory ?? "mixed")}>
-                  {secretCategories.map((category) => (
-                    <option key={category.key} value={category.key}>{category.label[locale === "fr" ? "fr" : "en"]}</option>
-                  ))}
-                </select>
-              </label>
-              <button className="pill pill-primary sm:col-span-2">Save settings</button>
-            </form>
-
-            <form action={fillBankSecrets} className="bubble-card grid gap-2 p-6">
-              <h3 className="font-black">Auto-fill secrets</h3>
-              <p className="text-sm text-[var(--muted)]">Give every active player without a secret one from the chosen pack. Players can still change theirs while submission is open.</p>
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="gameId" value={String(game.id)} />
-              <button className="pill pill-secondary w-fit"><Sparkles size={16} /> Fill missing secrets</button>
-            </form>
-
-            <form action={uploadGameBackground} className="bubble-card grid gap-3 p-6">
-              <h3 className="font-black">Dashboard background image</h3>
-              <p className="text-sm text-[var(--muted)]">Shown behind the TV dashboard. PNG, JPEG or WebP.</p>
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="gameId" value={String(game.id)} />
-              <input className="field" type="file" name="image" accept="image/png,image/jpeg,image/webp" required />
-              <button className="pill pill-secondary w-fit">Upload background</button>
-            </form>
           </div>
         ) : null}
 
@@ -1186,36 +1319,92 @@ export function HostControlRoom({
   );
 }
 
-function walletLabel(wallet: Row | null | undefined) {
-  if (!wallet) return "—";
-  if (String(wallet.kind) === "house") return "House";
-  const profile = (wallet.game_players as Row | null)?.profiles as Row | null;
-  if (profile?.display_name) return String(profile.display_name);
-  const team = wallet.teams as Row | null;
-  if (team?.name) return `${String(team.name)} (team)`;
-  return "Unknown";
+// One net line per game action for a player's card. An accusation writes up to
+// three ledger transactions (stake escrow, stake refund, settlement) that share
+// a buzz id in their idempotency key; the host only wants the outcome
+// ("Accusation won +X"), not the escrow/refund plumbing — so entries are
+// grouped by action and summed.
+function playerTransactions(ledger: Row[], playerId: string) {
+  const groups = new Map<string, { net: number; types: Set<string>; at: number }>();
+
+  for (const transaction of ledger) {
+    const entries = (transaction.ledger_entries as Row[] | null) ?? [];
+    const mine = entries.filter(
+      (entry) => String((entry.wallets as Row | null)?.player_id) === playerId,
+    );
+    if (!mine.length) continue;
+
+    // "buzzescrow:<id>", "buzzrefund:<id>" and "buzz:<id>" collapse to the same
+    // accusation; "mission:<mid>:<pid>" collapses to the mission; every other
+    // key is already one action.
+    const rawKey = String(transaction.idempotency_key ?? transaction.id);
+    const key = rawKey.replace(/^[a-z_]+:/i, "").split(":")[0] || rawKey;
+
+    const group = groups.get(key) ?? { net: 0, types: new Set<string>(), at: 0 };
+    for (const entry of mine) group.net += Number(entry.amount);
+    group.types.add(String(transaction.type));
+    group.at = Math.max(group.at, Date.parse(String(transaction.created_at ?? "")) || 0);
+    groups.set(key, group);
+  }
+
+  return [...groups.entries()]
+    .filter(([, group]) => group.net !== 0)
+    .sort(([, a], [, b]) => b.at - a.at)
+    .map(([id, group]) => ({ id, label: actionLabel(group.types, group.net), amount: group.net }));
 }
 
-// One player's slice of the shared ledger: the signed entry on their own
-// wallet plus who the balancing entry belongs to (item 10 — replaces the
-// standalone Economy tab).
-function playerTransactions(ledger: Row[], playerId: string) {
-  return ledger.flatMap((transaction) => {
-    const entries = (transaction.ledger_entries as Row[] | null) ?? [];
-    const mine = entries.find((entry) => String((entry.wallets as Row | null)?.player_id) === playerId);
-    if (!mine) return [];
-    const other = entries.find((entry) => entry !== mine);
-    const amount = Number(mine.amount);
-    const counterparty = walletLabel((other?.wallets as Row | null) ?? null);
-    return [{
-      id: String(transaction.id),
-      label:
-        String(transaction.type).replaceAll("_", " ") +
-        (transaction.reversed_transaction_id ? " · reversal" : ""),
-      direction: amount >= 0 ? `from ${counterparty}` : `to ${counterparty}`,
-      amount,
-    }];
-  });
+function actionLabel(types: Set<string>, net: number) {
+  const list = [...types];
+  const has = (prefix: string) => list.some((type) => type.startsWith(prefix));
+  if (has("buzz_")) {
+    if (types.has("buzz_wrong")) return "Defense held";
+    return net >= 0 ? "Accusation won" : "Accusation lost";
+  }
+  if (has("hint")) return net >= 0 ? "Hint sold" : "Hint bought";
+  if (types.has("mission_reward")) return "Mission reward";
+  if (types.has("mission_penalty")) return "Mission penalty";
+  if (has("dilemma_")) return "Dilemma";
+  if (types.has("team_funding")) return "Team pot";
+  if (types.has("admin_adjustment")) return "Host adjustment";
+  if (types.has("starting_cash")) return "Starting cash";
+  if (types.has("reversal")) return "Correction";
+  return (list[0] ?? "movement").replaceAll("_", " ");
+}
+
+// The lock/unlock control for player secrets. While round 1 hasn't started the
+// host can flip it as often as they like; once the game is live the pill is
+// inert and just shows the closed padlock.
+function SecretsLockPill({
+  locale,
+  gameId,
+  locked,
+  canToggle,
+  className = "",
+}: {
+  locale: string;
+  gameId: string;
+  locked: boolean;
+  canToggle: boolean;
+  className?: string;
+}) {
+  const Icon = locked ? Lock : LockOpen;
+  if (!canToggle) {
+    return (
+      <span className={`pill pill-secondary opacity-70 ${className}`} title="Secrets are locked for the rest of the game">
+        <Icon size={16} /> Secrets
+      </span>
+    );
+  }
+  return (
+    <form action={hostTransition} className={className}>
+      <input type="hidden" name="locale" value={locale} />
+      <input type="hidden" name="gameId" value={gameId} />
+      <input type="hidden" name="action" value={locked ? "unlock_secrets" : "lock_secrets"} />
+      <button className={`pill ${locked ? "pill-primary" : "pill-secondary"}`} title={locked ? "Unlock secrets so players can edit them" : "Lock secrets"}>
+        <Icon size={16} /> Secrets
+      </button>
+    </form>
+  );
 }
 
 function Empty({ icon: Icon, text }: { icon: typeof Lightbulb; text: string }) {

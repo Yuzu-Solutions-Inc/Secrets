@@ -86,6 +86,17 @@ export default async function GamePage({
     .eq("kind", "dilemma")
     .order("published_at", { ascending: false })
     .limit(10);
+  // The most recent public broadcast, for the 5s phone flash (item 23).
+  const { data: latestBroadcastRow } = await supabase
+    .from("game_events")
+    .select("id,kind,title,body,published_at")
+    .eq("game_id", id)
+    .eq("is_public", true)
+    .not("published_at", "is", null)
+    .order("published_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const dilemmaIds = (dilemmaEvents ?? []).map((event) => event.id as string);
   const { data: myDilemmaResponses } = dilemmaIds.length
     ? await supabase.from("game_event_responses").select("game_event_id,choice").eq("player_id", currentPlayer.id).in("game_event_id", dilemmaIds)
@@ -147,6 +158,16 @@ export default async function GamePage({
         activeBuzzes={activeBuzzes ?? []}
         vault={vault && typeof vault === "object" ? vault as Record<string, unknown> : null}
         dilemmas={dilemmas}
+        latestBroadcast={
+          latestBroadcastRow
+            ? {
+                id: latestBroadcastRow.id as string,
+                kind: String(latestBroadcastRow.kind ?? "announcement"),
+                title: String(latestBroadcastRow.title ?? ""),
+                body: latestBroadcastRow.body ? String(latestBroadcastRow.body) : null,
+              }
+            : null
+        }
       />
     </>
   );

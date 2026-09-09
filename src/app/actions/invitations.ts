@@ -4,18 +4,19 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { hashInviteToken, INVITE_DAYS, newInviteToken, normalizeEmail } from "@/lib/auth/invitations";
+import { normalizeEmail } from "@/lib/auth/invitations";
 import { getUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
-export type InviteState = { error?: string; inviteUrl?: string };
+export type WhitelistState = { error?: string };
 
-export async function createInvitation(
-  _state: InviteState,
+// Host adds an email to a game's allow-list. The join link is the same for
+// everyone; only listed emails can actually join (item 2).
+export async function addToWhitelist(
+  _state: WhitelistState,
   formData: FormData,
-): Promise<InviteState> {
+): Promise<WhitelistState> {
   const parsed = z.object({
-    organizationId: z.string().uuid(),
     gameId: z.string().uuid(),
     email: z.string().email(),
     locale: z.enum(["en", "fr"]),
@@ -23,62 +24,60 @@ export async function createInvitation(
   if (!parsed.success) return { error: "invalid" };
   const user = await getUser();
   if (!user) return { error: "unauthorized" };
+
   const supabase = await createClient();
-  const token = newInviteToken();
-  const { error } = await supabase.from("organization_invitations").insert({
-    organization_id: parsed.data.organizationId,
-    game_id: parsed.data.gameId,
-    email: normalizeEmail(parsed.data.email),
-    role: "player",
-    token_hash: hashInviteToken(token),
-    invited_by: user.id,
-    expires_at: new Date(Date.now() + INVITE_DAYS * 86400_000).toISOString(),
-  });
+  const { error } = await supabase.from("game_whitelist").upsert(
+    {
+      game_id: parsed.data.gameId,
+      email: normalizeEmail(parsed.data.email),
+      added_by: user.id,
+    },
+    { onConflict: "game_id,email", ignoreDuplicates: true },
+  );
   if (error) return { error: error.message };
-  const origin = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  return { inviteUrl: `${origin}/${parsed.data.locale}/invite/${token}` };
+  revalidatePath(`/${parsed.data.locale}/games/${parsed.data.gameId}/host`);
+  return {};
 }
 
-export type AcceptInviteState = { error?: AcceptInviteError };
+export async function removeFromWhitelist(formData: FormData) {
+  const parsed = z.object({
+    id: z.string().uuid(),
+    gameId: z.string().uuid(),
+    locale: z.enum(["en", "fr"]),
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.from("game_whitelist").delete().eq("id", parsed.id);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}/host`);
+}
 
-/** Known rejections raised by the `accept_invitation` Postgres function. */
-export type AcceptInviteError =
+export type JoinGameError =
   | "unauthorized"
-  | "invalid_invitation"
-  | "email_mismatch"
+  | "invalid_link"
+  | "not_whitelisted"
   | "late_join_closed"
   | "unknown";
 
-const ACCEPT_INVITE_ERRORS: AcceptInviteError[] = [
-  "unauthorized",
-  "invalid_invitation",
-  "email_mismatch",
-  "late_join_closed",
-];
+const JOIN_ERRORS: JoinGameError[] = ["unauthorized", "invalid_link", "not_whitelisted", "late_join_closed"];
 
-export async function acceptInvitation(
-  _state: AcceptInviteState,
+export type JoinGameState = { error?: JoinGameError };
+
+export async function joinGame(
+  _state: JoinGameState,
   formData: FormData,
-): Promise<AcceptInviteState> {
-  const parsed = z
-    .object({
-      token: z.string().min(20),
-      locale: z.enum(["en", "fr"]),
-    })
-    .safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: "invalid_invitation" };
+): Promise<JoinGameState> {
+  const parsed = z.object({
+    token: z.string().min(8),
+    locale: z.enum(["en", "fr"]),
+  }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "invalid_link" };
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("accept_invitation", {
-    p_token_hash: hashInviteToken(parsed.data.token),
-  });
+  const { error } = await supabase.rpc("join_game", { p_token: parsed.data.token });
   if (error) {
-    // These are expected outcomes (wrong email, game already started, …), not
-    // crashes — surface them on the invite page instead of a bare 500.
-    const known = ACCEPT_INVITE_ERRORS.find((code) => error.message.includes(code));
+    const known = JOIN_ERRORS.find((code) => error.message.includes(code));
     return { error: known ?? "unknown" };
   }
-
   revalidatePath(`/${parsed.data.locale}/games`);
   redirect(`/${parsed.data.locale}/games`);
 }

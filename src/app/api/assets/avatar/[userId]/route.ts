@@ -29,7 +29,7 @@ export async function GET(
 
   return new NextResponse(data, {
     headers: {
-      "Content-Type": data.type || "image/jpeg",
+      "Content-Type": data.type || "image/webp",
       "Cache-Control": "private, max-age=300",
       "X-Content-Type-Options": "nosniff",
     },

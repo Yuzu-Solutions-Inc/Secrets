@@ -9,7 +9,6 @@ import {
   LockKeyhole,
   Megaphone,
   ShieldQuestion,
-  UserRound,
   Users,
   X,
   Zap,
@@ -39,6 +38,7 @@ import {
 import { castVote } from "@/app/actions/admin";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
+import { Avatar } from "./avatar";
 
 type Player = {
   id: string;
@@ -52,6 +52,7 @@ type VaultHint = {
   id: string;
   kind: string;
   text: string | null;
+  has_image?: boolean;
   position: number;
   about_player_id: string | null;
   about_player_name: string | null;
@@ -114,6 +115,7 @@ type Props = {
   activeBuzzes: Array<Record<string, unknown>>;
   vault: Record<string, unknown> | null;
   dilemmas?: Array<{ id: string; prompt: string; option1: string; option2: string; myChoice: string | null }>;
+  latestBroadcast?: { id: string; kind: string; title: string; body: string | null } | null;
 };
 
 export function PlayerDashboard(props: Props) {
@@ -158,6 +160,41 @@ export function PlayerDashboard(props: Props) {
   }, [vault]);
 
   const houseClues = (props.houseSecret?.clues as Array<Record<string, unknown>> | undefined) ?? [];
+
+  // 5s flash + blip when a new broadcast lands while the phone is open (item 23).
+  const [flash, setFlash] = useState<Props["latestBroadcast"] | null>(null);
+  const broadcastSeenRef = useRef<string | null>(null);
+  useEffect(() => {
+    broadcastSeenRef.current = props.latestBroadcast?.id ?? null;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const id = props.latestBroadcast?.id ?? null;
+    if (!id || id === broadcastSeenRef.current) return;
+    broadcastSeenRef.current = id;
+    setFlash(props.latestBroadcast ?? null);
+    try {
+      const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (Ctor) {
+        const ctx = new Ctor();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(660, ctx.currentTime);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.55);
+        window.setTimeout(() => void ctx.close(), 800);
+      }
+    } catch {
+      /* audio not available — the visual flash is enough */
+    }
+    const clear = window.setTimeout(() => setFlash(null), 5000);
+    return () => window.clearTimeout(clear);
+  }, [props.latestBroadcast]);
 
   useEffect(() => {
     // Close the open modal once its server action reports success.
@@ -260,6 +297,15 @@ export function PlayerDashboard(props: Props) {
 
   return (
     <section className="mx-auto max-w-3xl pb-24">
+      {flash ? (
+        <div className="fixed inset-x-3 top-3 z-50 rounded-2xl bg-gradient-to-br from-pink-500 to-fuchsia-600 p-4 text-white shadow-[0_20px_50px_rgba(190,18,120,.4)]">
+          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-white/90">
+            <Megaphone size={14} /> {flash.kind}
+          </p>
+          <p className="display mt-1 text-lg font-black leading-tight">{flash.title}</p>
+          {flash.body ? <p className="mt-1 text-sm font-medium text-white/95">{flash.body}</p> : null}
+        </div>
+      ) : null}
       {/* 1. Player profile */}
       <article className="bubble-card flex items-center gap-4 p-5">
         <Avatar userId={props.currentUserId} name={me?.profiles?.display_name ?? null} size={56} />
@@ -420,8 +466,9 @@ export function PlayerDashboard(props: Props) {
               {selectedHints.length ? (
                 <ul className="mt-3 space-y-2">
                   {selectedHints.map((hint) => (
-                    <li key={hint.id} className="rounded-2xl bg-amber-50 p-3 text-sm">
-                      {hint.kind === "image" ? (
+                    <li key={hint.id} className="space-y-2 rounded-2xl bg-amber-50 p-3 text-sm">
+                      {hint.text ? <p>{hint.text}</p> : null}
+                      {hint.has_image || hint.kind === "image" ? (
                         <Image
                           className="h-auto w-full rounded-xl"
                           src={`/api/assets/hints/${hint.id}`}
@@ -430,9 +477,7 @@ export function PlayerDashboard(props: Props) {
                           height={500}
                           unoptimized
                         />
-                      ) : (
-                        hint.text
-                      )}
+                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -563,31 +608,6 @@ export function PlayerDashboard(props: Props) {
         </div>
       ) : null}
     </section>
-  );
-}
-
-function Avatar({ userId, name, size }: { userId: string | null; name: string | null; size: number }) {
-  const [failed, setFailed] = useState(false);
-  const dimension = { width: `${size}px`, height: `${size}px` };
-  if (!userId || failed) {
-    return (
-      <span style={dimension} className="grid shrink-0 place-items-center rounded-full bg-pink-100 text-pink-500">
-        <UserRound size={Math.round(size * 0.55)} />
-      </span>
-    );
-  }
-  return (
-    <span style={dimension} className="relative block shrink-0 overflow-hidden rounded-full bg-pink-100">
-      <Image
-        src={`/api/assets/avatar/${userId}`}
-        alt={name ?? ""}
-        fill
-        sizes={`${size}px`}
-        unoptimized
-        className="object-cover"
-        onError={() => setFailed(true)}
-      />
-    </span>
   );
 }
 
@@ -891,7 +911,7 @@ function MyGame(props: MyGameProps) {
               return (
                 <details key={String(grant.id)} className="rounded-2xl bg-amber-50 p-4">
                   <summary className="cursor-pointer font-bold">{String(hint?.text ?? "Image hint")}</summary>
-                  {hint?.kind === "image" ? (
+                  {hint?.asset_path || hint?.kind === "image" ? (
                     <Image
                       className="mt-3 h-auto w-full rounded-xl"
                       src={`/api/assets/hints/${String(hint.id)}`}
