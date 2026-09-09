@@ -66,6 +66,7 @@ type VaultHint = {
   position: number;
   about_player_id: string | null;
   about_player_name: string | null;
+  source?: "granted" | "revealed";
 };
 
 type VaultNote = { target_player_id: string | null; body: string; updated_at: string };
@@ -501,16 +502,26 @@ export function PlayerDashboard(props: Props) {
                 <div>
                   <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Hints by player</p>
                   <div className="mt-3 space-y-3">
-                    {hintsByPlayer.map((group) => (
-                      <div key={group.id} className="rounded-2xl bg-amber-50 p-4">
-                        <p className="font-black">{group.name}</p>
-                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-                          {group.hints.map((hint) => (
-                            <li key={hint.id}>{hint.kind === "image" ? "Image hint — open the Hints panel to view" : hint.text}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
+                    {hintsByPlayer.map((group) => {
+                      const anyRevealed = group.hints.some((hint) => hint.source === "revealed");
+                      return (
+                        <div key={group.id} className={`rounded-2xl p-4 ${anyRevealed ? "bg-violet-50 ring-1 ring-violet-200" : "bg-amber-50"}`}>
+                          <p className="flex items-center gap-2 font-black">
+                            {group.name}
+                            {anyRevealed ? (
+                              <span className="rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-white">
+                                Secret out
+                              </span>
+                            ) : null}
+                          </p>
+                          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                            {group.hints.map((hint) => (
+                              <li key={hint.id}>{hint.kind === "image" ? "Image hint — open the Hints panel to view" : hint.text}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ) : null}
