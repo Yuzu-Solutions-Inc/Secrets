@@ -36,9 +36,11 @@ import {
   createHouseSecret,
   createMission,
   createTeam,
+  deleteRound,
   duplicateRound,
   fillBankSecrets,
   moveRound,
+  updateRound,
   publishEvent,
   replaceSecret,
   settleTeamDilemma,
@@ -88,6 +90,7 @@ export function HostControlRoom({
   const [secretQuery, setSecretQuery] = useState("");
   const [secretFilter, setSecretFilter] = useState("all");
   const [openSecrets, setOpenSecrets] = useState<Set<string>>(new Set());
+  const [openRound, setOpenRound] = useState<string | null>(null);
 
   // Once the game has started, the invite panel is replaced by the host's
   // money-correction tools (item 11).
@@ -380,32 +383,119 @@ export function HostControlRoom({
               </div>
             ) : null}
             <div className="bubble-card divide-y divide-pink-100 overflow-hidden">
-              {rounds.map((round, index) => (
-                <div key={String(round.id)} className="flex items-center gap-4 p-5">
-                  <span className="display grid size-10 shrink-0 place-items-center rounded-full bg-pink-100 font-black text-pink-700">{index + 1}</span>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="font-black">{String(round.title)}</h2>
-                    <p className="text-sm text-[var(--muted)]">{String(round.kind).replaceAll("_", " ")} · {String(round.status)}</p>
-                  </div>
-                  <div className="flex gap-1">
-                    {(["up", "down"] as const).map((direction) => (
-                      <form action={moveRound} key={direction}>
-                        <input type="hidden" name="locale" value={locale} />
-                        <input type="hidden" name="gameId" value={String(game.id)} />
-                        <input type="hidden" name="roundId" value={String(round.id)} />
-                        <input type="hidden" name="direction" value={direction} />
-                        <button className="grid size-9 place-items-center rounded-full bg-pink-50" aria-label={`Move ${direction}`}>{direction === "up" ? "↑" : "↓"}</button>
-                      </form>
-                    ))}
-                    <form action={duplicateRound}>
-                      <input type="hidden" name="locale" value={locale} />
-                      <input type="hidden" name="gameId" value={String(game.id)} />
-                      <input type="hidden" name="roundId" value={String(round.id)} />
-                      <button className="grid size-9 place-items-center rounded-full bg-pink-50" aria-label="Duplicate">＋</button>
-                    </form>
-                  </div>
-                </div>
-              ))}
+              {(() => {
+                const currentPos = currentRound ? Number(currentRound.position) : -1;
+                const nextId = rounds
+                  .filter((r) => String(r.status) === "scheduled" && Number(r.position) > currentPos)
+                  .sort((a, b) => Number(a.position) - Number(b.position))[0]?.id;
+                return rounds.map((round, index) => {
+                  const rid = String(round.id);
+                  const status = String(round.status);
+                  const isCurrent = rid === String(game.current_round_id) || status === "live" || status === "paused";
+                  const isFuture = status === "scheduled" && Number(round.position) > currentPos;
+                  const stage = status === "completed"
+                    ? "finished"
+                    : status === "cancelled"
+                      ? "cancelled"
+                      : isCurrent
+                        ? "current"
+                        : rid === nextId
+                          ? "next"
+                          : "upcoming";
+                  const cfg = (round.config ?? {}) as Row;
+                  const editing = openRound === rid;
+                  return (
+                    <div key={rid}>
+                      <div className="flex items-center gap-3 p-4">
+                        <span className="display grid size-9 shrink-0 place-items-center rounded-full bg-pink-100 font-black text-pink-700">{index + 1}</span>
+                        <div className="min-w-0 flex-1">
+                          <h2 className="truncate font-black">{String(round.title)}</h2>
+                          <p className="text-xs text-[var(--muted)]">{String(round.kind).replaceAll("_", " ")} · {Number(cfg.durationMinutes ?? 0)} min</p>
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-black ${
+                          stage === "current" ? "bg-emerald-100 text-emerald-800"
+                          : stage === "next" ? "bg-pink-100 text-pink-800"
+                          : stage === "finished" ? "bg-[var(--muted-bg,#eee)] text-[var(--muted)]"
+                          : stage === "cancelled" ? "bg-red-100 text-red-800"
+                          : "bg-white text-[var(--muted)] ring-1 ring-[var(--border)]"
+                        }`}>{stage}</span>
+                        {round.kind === "finale" ? <span className="shrink-0 rounded-full bg-violet-100 px-2 py-1 text-xs font-black text-violet-800">final</span> : null}
+                        <div className="flex shrink-0 gap-1">
+                          {(["up", "down"] as const).map((direction) => (
+                            <form action={moveRound} key={direction}>
+                              <input type="hidden" name="locale" value={locale} />
+                              <input type="hidden" name="gameId" value={String(game.id)} />
+                              <input type="hidden" name="roundId" value={rid} />
+                              <input type="hidden" name="direction" value={direction} />
+                              <button className="grid size-8 place-items-center rounded-full bg-pink-50" aria-label={`Move ${direction}`}>{direction === "up" ? "↑" : "↓"}</button>
+                            </form>
+                          ))}
+                          <form action={duplicateRound}>
+                            <input type="hidden" name="locale" value={locale} />
+                            <input type="hidden" name="gameId" value={String(game.id)} />
+                            <input type="hidden" name="roundId" value={rid} />
+                            <button className="grid size-8 place-items-center rounded-full bg-pink-50" aria-label="Duplicate">＋</button>
+                          </form>
+                          <button type="button" onClick={() => setOpenRound(editing ? null : rid)} className="grid size-8 place-items-center rounded-full bg-pink-50" aria-label="Edit settings" aria-expanded={editing}>⚙</button>
+                        </div>
+                      </div>
+                      {editing ? (
+                        <form action={updateRound} className="grid gap-3 border-t border-pink-100 bg-pink-50/30 p-4 sm:grid-cols-2">
+                          <input type="hidden" name="locale" value={locale} />
+                          <input type="hidden" name="gameId" value={String(game.id)} />
+                          <input type="hidden" name="roundId" value={rid} />
+                          <label className="text-xs font-bold sm:col-span-2">Title
+                            <input className="field mt-1" name="title" defaultValue={String(round.title)} required />
+                          </label>
+                          <label className="text-xs font-bold">Duration (min)
+                            <input className="field mt-1" name="durationMinutes" type="number" min="1" defaultValue={Number(cfg.durationMinutes ?? 45)} required />
+                          </label>
+                          <label className="text-xs font-bold">Wallet mode
+                            <select className="field mt-1" name="walletMode" defaultValue={String(cfg.walletMode ?? "personal")}>
+                              <option value="personal">Personal</option>
+                              <option value="temporary_team">Temporary team pot</option>
+                              <option value="pooled_personal">Pooled balances</option>
+                            </select>
+                          </label>
+                          <label className="text-xs font-bold">Accusation buzz cost
+                            <input className="field mt-1" name="accusationStake" type="number" min="0" defaultValue={Math.round(Number(cfg.accusationStake ?? 0) / 100)} required />
+                          </label>
+                          <label className="text-xs font-bold">Hint cost
+                            <input className="field mt-1" name="hintPrice" type="number" min="0" defaultValue={Math.round(Number(cfg.hintPrice ?? 0) / 100)} required />
+                          </label>
+                          <label className="text-xs font-bold">Correct-buzz transfer %
+                            <input className="field mt-1" name="correctTransferPercent" type="number" min="0" max="100" defaultValue={Number(cfg.correctTransferPercent ?? 50)} required />
+                          </label>
+                          <label className="text-xs font-bold">Hint visibility
+                            <select className="field mt-1" name="hintVisibility" defaultValue={String(cfg.hintVisibility ?? "private")}>
+                              <option value="private">Private</option><option value="team">Team</option><option value="public">Public</option>
+                            </select>
+                          </label>
+                          <label className="text-xs font-bold">Completes on
+                            <select className="field mt-1" name="completion" defaultValue={String(cfg.completion ?? "manual")}>
+                              <option value="manual">Manual</option><option value="timer">Timer</option><option value="all_submitted">All submitted</option>
+                            </select>
+                          </label>
+                          <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" name="accusationBuzzEnabled" defaultChecked={cfg.accusationBuzzEnabled !== false} /> Accusation buzz enabled</label>
+                          <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" name="hintBuzzEnabled" defaultChecked={cfg.hintBuzzEnabled !== false} /> Hint buzz enabled</label>
+                          <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+                            <button className="pill pill-primary h-9 text-xs">Save round</button>
+                            {!isFuture ? <span className="text-xs text-[var(--muted)]">Only future rounds can be deleted.</span> : null}
+                          </div>
+                        </form>
+                      ) : null}
+                      {editing && isFuture ? (
+                        <form action={deleteRound} className="border-t border-pink-100 bg-pink-50/30 px-4 pb-4">
+                          <input type="hidden" name="locale" value={locale} />
+                          <input type="hidden" name="gameId" value={String(game.id)} />
+                          <input type="hidden" name="roundId" value={rid} />
+                          <button className="pill h-9 bg-red-500 text-xs text-white">Delete round</button>
+                        </form>
+                      ) : null}
+                    </div>
+                  );
+                });
+              })()}
               {!rounds.length ? <p className="p-6 text-[var(--muted)]">Add rounds to your custom schedule.</p> : null}
             </div>
           </div>

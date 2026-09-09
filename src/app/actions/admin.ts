@@ -74,6 +74,50 @@ export async function duplicateRound(formData: FormData) {
   refresh(parsed.locale, parsed.gameId);
 }
 
+// Rounds page editor (item 4): edit a round's title + full config in place.
+export async function updateRound(formData: FormData) {
+  const parsed = base.extend({
+    roundId: z.string().uuid(),
+    title: z.string().trim().min(2).max(100),
+    durationMinutes: z.coerce.number().int().positive().max(1440),
+    walletMode: z.enum(["temporary_team", "pooled_personal", "personal"]),
+    accusationBuzzEnabled: z.coerce.boolean(),
+    hintBuzzEnabled: z.coerce.boolean(),
+    accusationStake: z.coerce.number().int().nonnegative(),
+    correctTransferPercent: z.coerce.number().int().min(0).max(100),
+    hintPrice: z.coerce.number().int().nonnegative(),
+    hintVisibility: z.enum(["private", "team", "public"]),
+    completion: z.enum(["manual", "timer", "all_submitted"]),
+  }).parse(Object.fromEntries(formData));
+  const config = roundConfigSchema.parse({
+    durationMinutes: parsed.durationMinutes,
+    walletMode: parsed.walletMode,
+    accusationBuzzEnabled: parsed.accusationBuzzEnabled,
+    hintBuzzEnabled: parsed.hintBuzzEnabled,
+    accusationStake: parsed.accusationStake * 100,
+    correctTransferPercent: parsed.correctTransferPercent,
+    hintPrice: parsed.hintPrice * 100,
+    hintVisibility: parsed.hintVisibility,
+    completion: parsed.completion,
+  });
+  const supabase = await createClient();
+  const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
+  if (!allowed) throw new Error("forbidden");
+  const { error } = await supabase.from("game_rounds").update({ title: parsed.title, config }).eq("id", parsed.roundId);
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+// Delete a not-yet-run round (server enforces "future only"; see the
+// delete_game_round migration).
+export async function deleteRound(formData: FormData) {
+  const parsed = base.extend({ roundId: z.string().uuid() }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("delete_game_round", { p_round_id: parsed.roundId });
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
 export async function createTeam(formData: FormData) {
   const parsed = base.extend({
     roundId: z.string().uuid(),
