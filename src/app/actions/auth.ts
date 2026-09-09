@@ -53,12 +53,17 @@ export async function authenticate(
 
 export async function signInWithGoogle(formData: FormData) {
   const locale = formData.get("locale") === "en" ? "en" : "fr";
+  const rawNext = formData.get("next");
+  const next =
+    typeof rawNext === "string" && rawNext.startsWith(`/${locale}/`)
+      ? rawNext
+      : `/${locale}/games`;
   const origin = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${origin}/auth/callback?next=/${locale}/games`,
+      redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
     },
   });
   if (error || !data.url) redirect(`/${locale}/login?error=oauth`);
@@ -79,9 +84,12 @@ export async function requestPasswordReset(formData: FormData) {
 
 export async function signOut(formData: FormData) {
   const locale = formData.get("locale") === "en" ? "en" : "fr";
+  const rawNext = formData.get("next");
+  const next =
+    typeof rawNext === "string" && rawNext.startsWith("/") ? rawNext : `/${locale}`;
   const supabase = await createClient();
   await supabase.auth.signOut();
-  redirect(`/${locale}`);
+  redirect(next as Parameters<typeof redirect>[0]);
 }
 
 export async function updatePassword(formData: FormData) {

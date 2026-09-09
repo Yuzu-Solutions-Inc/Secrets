@@ -79,6 +79,7 @@ export function AuthForm({
 
       <form action={signInWithGoogle} className="mt-3">
         <input type="hidden" name="locale" value={locale} />
+        <input type="hidden" name="next" value={next ?? ""} />
         <button className="pill pill-secondary w-full">{t("google")}</button>
       </form>
       {mode === "signin" ? (

@@ -39,16 +39,46 @@ export async function createInvitation(
   return { inviteUrl: `${origin}/${parsed.data.locale}/invite/${token}` };
 }
 
-export async function acceptInvitation(formData: FormData) {
-  const parsed = z.object({
-    token: z.string().min(20),
-    locale: z.enum(["en", "fr"]),
-  }).parse(Object.fromEntries(formData));
+export type AcceptInviteState = { error?: AcceptInviteError };
+
+/** Known rejections raised by the `accept_invitation` Postgres function. */
+export type AcceptInviteError =
+  | "unauthorized"
+  | "invalid_invitation"
+  | "email_mismatch"
+  | "late_join_closed"
+  | "unknown";
+
+const ACCEPT_INVITE_ERRORS: AcceptInviteError[] = [
+  "unauthorized",
+  "invalid_invitation",
+  "email_mismatch",
+  "late_join_closed",
+];
+
+export async function acceptInvitation(
+  _state: AcceptInviteState,
+  formData: FormData,
+): Promise<AcceptInviteState> {
+  const parsed = z
+    .object({
+      token: z.string().min(20),
+      locale: z.enum(["en", "fr"]),
+    })
+    .safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "invalid_invitation" };
+
   const supabase = await createClient();
   const { error } = await supabase.rpc("accept_invitation", {
-    p_token_hash: hashInviteToken(parsed.token),
+    p_token_hash: hashInviteToken(parsed.data.token),
   });
-  if (error) throw new Error(error.message);
-  revalidatePath(`/${parsed.locale}/games`);
-  redirect(`/${parsed.locale}/games`);
+  if (error) {
+    // These are expected outcomes (wrong email, game already started, …), not
+    // crashes — surface them on the invite page instead of a bare 500.
+    const known = ACCEPT_INVITE_ERRORS.find((code) => error.message.includes(code));
+    return { error: known ?? "unknown" };
+  }
+
+  revalidatePath(`/${parsed.data.locale}/games`);
+  redirect(`/${parsed.data.locale}/games`);
 }
