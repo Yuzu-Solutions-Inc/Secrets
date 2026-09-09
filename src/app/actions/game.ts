@@ -284,6 +284,27 @@ export async function setDilemmaChoice(formData: FormData) {
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
 }
 
+// A player's answer to a broadcast dilemma (item 14). Upserts their single
+// row in game_event_responses; the host reads the stack.
+export async function submitDilemmaChoice(formData: FormData) {
+  const parsed = z.object({
+    gameId: z.string().uuid(),
+    eventId: z.string().uuid(),
+    playerId: z.string().uuid(),
+    choice: z.enum(["option_1", "option_2"]),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("game_event_responses")
+    .upsert(
+      { game_event_id: parsed.eventId, player_id: parsed.playerId, choice: parsed.choice, updated_at: new Date().toISOString() },
+      { onConflict: "game_event_id,player_id" },
+    );
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+}
+
 export async function hostTransition(formData: FormData) {
   const parsed = z.object({
     gameId: z.string().uuid(),

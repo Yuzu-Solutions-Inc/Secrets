@@ -78,6 +78,38 @@ export default async function GamePage({
       supabase.rpc("player_vault", { p_game_id: id }),
     ]);
 
+  // Active broadcast dilemmas that target this player, plus their own answer.
+  const { data: dilemmaEvents } = await supabase
+    .from("game_events")
+    .select("id,title,payload,published_at")
+    .eq("game_id", id)
+    .eq("kind", "dilemma")
+    .order("published_at", { ascending: false })
+    .limit(10);
+  const dilemmaIds = (dilemmaEvents ?? []).map((event) => event.id as string);
+  const { data: myDilemmaResponses } = dilemmaIds.length
+    ? await supabase.from("game_event_responses").select("game_event_id,choice").eq("player_id", currentPlayer.id).in("game_event_id", dilemmaIds)
+    : { data: [] as { game_event_id: string; choice: string }[] };
+  const myTeamId = (teamMember as { team_id?: string } | null)?.team_id ?? null;
+  const dilemmas = (dilemmaEvents ?? [])
+    .map((event) => {
+      const payload = (event.payload ?? {}) as Record<string, unknown>;
+      const scope = String(payload.scope ?? "all");
+      const targeted =
+        scope === "all" ||
+        (scope === "team" && myTeamId != null && String(payload.team_id) === myTeamId) ||
+        (scope === "player" && String(payload.player_id) === currentPlayer.id);
+      if (!targeted) return null;
+      return {
+        id: event.id as string,
+        prompt: String(event.title ?? ""),
+        option1: String(payload.option_1 ?? "Option 1"),
+        option2: String(payload.option_2 ?? "Option 2"),
+        myChoice: (myDilemmaResponses ?? []).find((response) => response.game_event_id === event.id)?.choice ?? null,
+      };
+    })
+    .filter((dilemma): dilemma is NonNullable<typeof dilemma> => dilemma !== null);
+
   return (
     <>
       {isAdmin ? (
@@ -114,6 +146,7 @@ export default async function GamePage({
         houseSecret={houseSecret && typeof houseSecret === "object" ? houseSecret as Record<string, unknown> : null}
         activeBuzzes={activeBuzzes ?? []}
         vault={vault && typeof vault === "object" ? vault as Record<string, unknown> : null}
+        dilemmas={dilemmas}
       />
     </>
   );
