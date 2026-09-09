@@ -578,11 +578,61 @@ single mega-commit.
   and I didn't write it — decide separately whether to commit it.
 - **Did not generate 5000 secrets** — see item 21.
 
-## Open questions for when you're awake
+## Decisions locked (2026-09-09 review)
 
-1. Elimination-round exits vs attendance "inactive" — one status or two? (item 3)
-2. Powers in the merged Broadcast tab, or kept separate as a grant? (item 12–18)
-3. Finale: ship all four winner methods now, or `formula` + `vote` first? (item 6)
-4. Secret bank: is ~600–800 curated bilingual seeds enough, or do you want a
-   full reviewed 5000-row generation pass? (item 21)
-5. Keep a game-wide ledger view somewhere for disputes after Economy is gone? (item 10)
+| # | Question | Decision |
+|---|---|---|
+| Cadence | How to run the work | **Batches of ~3 areas**, push one branch per batch, review at each checkpoint, then continue. |
+| Teams (item 1) | Who organizes teams | **Host builds teams in the Players tab**, game-scoped; **per-round reassignment stays possible** for one-off team rounds. Not player-self-serve. |
+| Base (all) | Starting point | **Branch off `main`.** The uncommitted billing/paywall tree is parked with `git stash -u` (reversible, nothing lost) so new diffs stay clean; not committed, not discarded. |
+| Finale (item 6) | How many winner methods | **All four now**: `formula`, `box_exchange`, `vote`, `other`. |
+| Secret bank (item 21) | 5000 vs curated | **Curated ~600–800 bilingual seeds now** (~40–60 per category), bank table built to grow. Not a 5000-row generation pass. |
+| Player status (item 3) | One state or two | **Two states.** `inactive` = attendance (reversible, no game effect); `eliminated` = removed by an elimination round (may carry finale/jury semantics). Both distinct from `spectator` (non-finalist). |
+| Powers (item 12–18) | Merge or separate | **Merge into the Broadcast tab** with a `type` switch: announcement / clue / dilemma / power. |
+| Language (item 19) | How strong | **Default + dashboard language only.** Sets the TV language and the default for new players; each player's own fr/en preference still wins on their phone. |
+
+## Assumptions (state now, veto anytime)
+
+- **System-assigned secret is editable.** A player can view and change their
+  bank-assigned secret during `secret_submission`. It's a fast-start default, not
+  a hidden-secret mechanic.
+- **Event display durations are asymmetric on purpose.** TV/dashboard: 60 s
+  full-screen takeover, then shrink into the history column. Open phone: 5 s
+  overlay with sound, then auto-dismiss.
+- **Mission assigned to "all players" = one assignment row per active player.**
+  The host closes each independently (mark some complete, some not).
+- **Dashboard adopts the app's `globals.css` pink/bubble tokens**, keeping a dark
+  background option for real TVs via `games.backgroundPath`.
+- **Box-exchange finale reuses the Share/Steal `resolveDilemma` engine**
+  (`rules.ts`) with host-editable percentages.
+- **A game-wide ledger view is kept** as a collapsible "Audit" panel on the
+  Settings tab after the Economy tab is removed (disputes still need it).
+- Work branches off `main`; if later batches surface drift from in-flight PRs I
+  rebase.
+
+## Batch plan
+
+- **Batch 1 — cleanup, no table changes:** header full-width (24); dashboard
+  structural pass — remove game id, de-box, full-viewport grid (event history
+  `1fr` / players `2fr`), header + timer treatment, app tokens (23, minus the
+  takeover→history animation and phone mirror, which ship with Batch 3); remove
+  Economy tab + per-player ledger panel + keep Audit panel (10); invite→wallet-
+  correction phase swap (11); profile picture + avatar storage policy (25).
+- **Batch 2 — settings & templates:** Settings tab + `games.settings` plumbing
+  (19/26); real `format` templates with economy presets + auto round times (20);
+  always-visible host run-of-show header with prev / play-pause / next (22).
+- **Batch 3 — schema migration + broadcast:** one migration (`teams.gameId`,
+  `secret_bank`, `game_event_responses`, `eliminated`/`spectator` statuses,
+  `finaleEntry` + `finaleResolution` config, promoted settings columns); Broadcast
+  tab (12–18) with the dashboard takeover→history animation and 5 s phone mirror
+  (23 remainder); missions wiring (9).
+- **Batch 4 — secrets surface:** Secrets page rebuild (7), House Secret merge (8),
+  lock controls (22c).
+- **Batch 5 — rounds & finale:** Rounds page editor + delete-future (4); finale
+  entry gate (5) and all four winner methods (6) end-to-end incl. box-exchange
+  player UI.
+- **Content track (parallel):** curated secret bank seeds (21).
+
+Per batch: `npm run typecheck && npm test && npm run build`, i18n en/fr key
+parity, update `supabase/tests` for any RLS change, Playwright for dashboard
+layout.
