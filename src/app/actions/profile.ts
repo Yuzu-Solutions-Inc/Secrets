@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { getUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
+import { processImage } from "@/lib/images";
 
 export async function updateProfile(formData: FormData) {
   const locale = formData.get("locale") === "en" ? "en" : "fr";
@@ -20,11 +21,11 @@ export async function updateProfile(formData: FormData) {
     if (file.size > 5 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
       throw new Error("invalid_avatar");
     }
-    const extension = file.type.split("/")[1].replace("jpeg", "jpg");
-    avatarPath = `avatars/${user.id}/avatar.${extension}`;
+    const { buffer, contentType } = await processImage(file, "avatar");
+    avatarPath = `avatars/${user.id}/avatar.webp`;
     const { error: uploadError } = await supabase.storage
       .from("game-assets")
-      .upload(avatarPath, file, { upsert: true, contentType: file.type });
+      .upload(avatarPath, buffer, { upsert: true, contentType });
     if (uploadError) throw new Error(uploadError.message);
   }
   const update: Record<string, string> = {

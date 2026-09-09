@@ -9,7 +9,6 @@ import {
   LockKeyhole,
   Megaphone,
   ShieldQuestion,
-  UserRound,
   Users,
   X,
   Zap,
@@ -39,6 +38,7 @@ import {
 import { castVote } from "@/app/actions/admin";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
+import { Avatar } from "./avatar";
 
 type Player = {
   id: string;
@@ -608,31 +608,6 @@ export function PlayerDashboard(props: Props) {
         </div>
       ) : null}
     </section>
-  );
-}
-
-function Avatar({ userId, name, size }: { userId: string | null; name: string | null; size: number }) {
-  const [failed, setFailed] = useState(false);
-  const dimension = { width: `${size}px`, height: `${size}px` };
-  if (!userId || failed) {
-    return (
-      <span style={dimension} className="grid shrink-0 place-items-center rounded-full bg-pink-100 text-pink-500">
-        <UserRound size={Math.round(size * 0.55)} />
-      </span>
-    );
-  }
-  return (
-    <span style={dimension} className="relative block shrink-0 overflow-hidden rounded-full bg-pink-100">
-      <Image
-        src={`/api/assets/avatar/${userId}`}
-        alt={name ?? ""}
-        fill
-        sizes={`${size}px`}
-        unoptimized
-        className="object-cover"
-        onError={() => setFailed(true)}
-      />
-    </span>
   );
 }
 

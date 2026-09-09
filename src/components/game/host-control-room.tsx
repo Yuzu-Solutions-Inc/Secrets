@@ -48,6 +48,7 @@ import {
   replaceSecret,
   settleTeamDilemma,
   saveFinaleConfig,
+  resolveFinale,
   saveWinnerFormula,
   setPlayerPlayStatus,
   startMission,
@@ -110,6 +111,7 @@ export function HostControlRoom({
   const [finaleMethod, setFinaleMethod] = useState<string>(
     () => String((((game.settings as Row | null)?.finale as Row | undefined)?.resolution as Row | undefined)?.method ?? "formula"),
   );
+  const [boxChoices, setBoxChoices] = useState<Record<string, "share" | "steal">>({});
 
   // Once the game has started, the invite panel is replaced by the host's
   // money-correction tools (item 11).
@@ -1215,6 +1217,102 @@ export function HostControlRoom({
                 <button className="pill pill-primary sm:col-span-2">Save winner formula</button>
               </form>
             ) : null}
+
+            {(() => {
+              const result = (settings.finaleResult ?? null) as Row | null;
+              if (result) {
+                const rows = (result.results as Row[] | null) ?? [];
+                const winnerId = String(result.winnerPlayerId ?? "");
+                return (
+                  <div className="bubble-card p-6">
+                    <h3 className="display text-2xl font-black">Finale result</h3>
+                    <p className="mt-1 text-sm text-[var(--muted)]">Method: {String(result.method)}</p>
+                    <ol className="mt-3 space-y-1">
+                      {rows.map((row, index) => (
+                        <li key={String(row.playerId)} className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm ${String(row.playerId) === winnerId ? "bg-emerald-100 font-black text-emerald-800" : "bg-pink-50"}`}>
+                          <span>{index + 1}. {String(row.name)}{String(row.playerId) === winnerId ? " · winner" : ""}</span>
+                          <span className="tabular-nums text-[var(--muted)]">
+                            {formatMoney(Number(row.balance ?? 0), String(game.currency_symbol))} · {Number(row.score ?? 0)} pts · {Number(row.votes ?? 0)} votes
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                );
+              }
+              if (String(game.status) !== "finale") {
+                return (
+                  <p className="rounded-2xl bg-pink-50 p-4 text-sm text-[var(--muted)]">
+                    Resolving the finale becomes available once the game reaches the finale (advance past the last round in the run-of-show header).
+                  </p>
+                );
+              }
+              const activePlayers = players.filter((p) => String(p.play_status ?? "active") === "active");
+              return (
+                <form
+                  action={resolveFinale}
+                  className="bubble-card grid gap-3 p-6"
+                  onSubmit={(e) => {
+                    if (finaleMethod === "box_exchange") {
+                      const missing = activePlayers.some((p) => !boxChoices[String(p.id)]);
+                      if (missing) {
+                        e.preventDefault();
+                        alert("Pick Share or Steal for every finalist first.");
+                      }
+                    }
+                  }}
+                >
+                  <input type="hidden" name="locale" value={locale} />
+                  <input type="hidden" name="gameId" value={String(game.id)} />
+                  <input type="hidden" name="boxChoices" value={finaleMethod === "box_exchange" ? JSON.stringify(boxChoices) : ""} />
+                  <h3 className="display text-2xl font-black">Resolve the finale</h3>
+                  <p className="text-sm text-[var(--muted)]">
+                    Method <span className="font-bold">{finaleMethod}</span>. Non-finalists become spectators; the game is marked complete. This can only run once.
+                  </p>
+
+                  {finaleMethod === "other" ? (
+                    <label className="text-xs font-bold">Winner
+                      <select className="field mt-1" name="winnerPlayerId" required defaultValue="">
+                        <option value="" disabled>Pick the winner</option>
+                        {activePlayers.map((player) => {
+                          const profile = player.profiles as Row | null;
+                          return <option key={String(player.id)} value={String(player.id)}>{String(profile?.display_name ?? "Player")}</option>;
+                        })}
+                      </select>
+                    </label>
+                  ) : null}
+
+                  {finaleMethod === "box_exchange" ? (
+                    <div className="grid gap-2">
+                      <p className="text-xs font-bold text-[var(--muted)]">Each finalist&apos;s Share / Steal choice</p>
+                      {activePlayers.map((player) => {
+                        const profile = player.profiles as Row | null;
+                        const pid = String(player.id);
+                        return (
+                          <div key={pid} className="flex items-center justify-between gap-3 rounded-xl bg-pink-50 px-3 py-2 text-sm">
+                            <span className="truncate font-bold">{String(profile?.display_name ?? "Player")}</span>
+                            <div className="flex gap-1">
+                              {(["share", "steal"] as const).map((choice) => (
+                                <button
+                                  key={choice}
+                                  type="button"
+                                  onClick={() => setBoxChoices((prev) => ({ ...prev, [pid]: choice }))}
+                                  className={`pill h-8 text-xs ${boxChoices[pid] === choice ? "pill-primary" : "pill-secondary"}`}
+                                >
+                                  {choice}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+
+                  <button className="pill pill-primary w-fit"><Vote size={16} /> Resolve &amp; complete game</button>
+                </form>
+              );
+            })()}
 
             <a className="pill pill-secondary w-full" href={`/api/games/${String(game.id)}/results`}>Export results CSV</a>
           </div>

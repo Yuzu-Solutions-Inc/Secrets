@@ -7,6 +7,7 @@ import { z } from "zod";
 import { roundConfigSchema, winnerFormulaSchema } from "@/lib/game/rules";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { processImage } from "@/lib/images";
 
 const base = z.object({
   gameId: z.string().uuid(),
@@ -276,8 +277,9 @@ export async function addHint(formData: FormData) {
     rows.push({ secret_id: parsed.secretId, kind: "text", text: parsed.text, position: position++ });
   }
   if (image) {
-    const path = `games/${parsed.gameId}/hints/${crypto.randomUUID()}.${image.type.split("/")[1].replace("jpeg", "jpg")}`;
-    const { error: uploadError } = await createAdminClient().storage.from("game-assets").upload(path, image, { contentType: image.type });
+    const { buffer, contentType } = await processImage(image, "hint");
+    const path = `games/${parsed.gameId}/hints/${crypto.randomUUID()}.webp`;
+    const { error: uploadError } = await createAdminClient().storage.from("game-assets").upload(path, buffer, { contentType });
     if (uploadError) throw new Error(uploadError.message);
     rows.push({ secret_id: parsed.secretId, kind: "image", asset_path: path, position: position++ });
   }
@@ -350,8 +352,9 @@ export async function uploadGameBackground(formData: FormData) {
   const supabase = await createClient();
   const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
   if (!allowed) throw new Error("forbidden");
-  const path = `games/${parsed.gameId}/background.${file.type.split("/")[1].replace("jpeg", "jpg")}`;
-  const { error: uploadError } = await createAdminClient().storage.from("game-assets").upload(path, file, { upsert: true, contentType: file.type });
+  const { buffer, contentType } = await processImage(file, "background");
+  const path = `games/${parsed.gameId}/background.webp`;
+  const { error: uploadError } = await createAdminClient().storage.from("game-assets").upload(path, buffer, { upsert: true, contentType });
   if (uploadError) throw new Error(uploadError.message);
   const { error } = await supabase.from("games").update({ background_path: path }).eq("id", parsed.gameId);
   if (error) throw new Error(error.message);
@@ -704,6 +707,32 @@ export async function saveFinaleConfig(formData: FormData) {
   const { error } = await supabase.from("games").update({
     settings: { ...settings, finale },
   }).eq("id", parsed.gameId);
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+// Run the finale end to end (items 5 & 6): resolve_finale() picks the
+// finalists, runs the configured method, records settings.finaleResult and
+// completes the game.
+export async function resolveFinale(formData: FormData) {
+  const parsed = base.extend({
+    winnerPlayerId: z.string().uuid().optional().or(z.literal("")),
+    boxChoices: z.string().optional().default(""),
+  }).parse(Object.fromEntries(formData));
+  let boxChoices: unknown = null;
+  if (parsed.boxChoices) {
+    try {
+      boxChoices = JSON.parse(parsed.boxChoices);
+    } catch {
+      throw new Error("invalid_box_choices");
+    }
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("resolve_finale", {
+    p_game_id: parsed.gameId,
+    p_winner_player_id: parsed.winnerPlayerId || null,
+    p_box_choices: boxChoices,
+  });
   if (error) throw new Error(error.message);
   refresh(parsed.locale, parsed.gameId);
 }

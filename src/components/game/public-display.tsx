@@ -343,11 +343,11 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
               className={`flex flex-col justify-center rounded-[18px] px-[clamp(.75rem,1.4vw,1.25rem)] py-[clamp(.6rem,1.1vw,1rem)] ${revealed ? "bg-violet-100 ring-2 ring-violet-500" : "bg-pink-50"}`}
             >
               <div className="flex items-center gap-[clamp(.5rem,1vw,.85rem)]">
-                <span
-                  className={`grid size-[clamp(30px,3vw,44px)] shrink-0 place-items-center rounded-full text-[clamp(.85rem,1.4vw,1.15rem)] font-black text-white ${revealed ? "bg-gradient-to-br from-violet-500 to-fuchsia-700" : "bg-gradient-to-br from-pink-400 to-violet-600"}`}
-                >
-                  {String(player.display_name ?? "?").slice(0, 1)}
-                </span>
+                <BoardAvatar
+                  src={`/api/assets/avatar/public/${code}/${String(player.id)}`}
+                  name={String(player.display_name ?? "?")}
+                  revealed={revealed}
+                />
                 <p className="truncate text-[clamp(.95rem,1.5vw,1.4rem)] font-black">{String(player.display_name ?? "Player")}</p>
               </div>
               <p className={`display mt-[clamp(.35rem,.8vw,.6rem)] text-[clamp(1.2rem,2.1vw,1.9rem)] font-black leading-none ${revealed ? "text-violet-800" : "text-pink-700"}`}>
@@ -595,5 +595,30 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
         </div>
       </div>
     </div>
+  );
+}
+
+// Player photo on the balances board; falls back to the gradient initial circle
+// when there is no avatar or it fails to load.
+function BoardAvatar({ src, name, revealed }: { src: string; name: string; revealed: boolean }) {
+  const [failed, setFailed] = useState(false);
+  const base =
+    "size-[clamp(30px,3vw,44px)] shrink-0 rounded-full " +
+    (revealed ? "bg-gradient-to-br from-violet-500 to-fuchsia-700" : "bg-gradient-to-br from-pink-400 to-violet-600");
+  if (failed) {
+    return (
+      <span className={`grid place-items-center ${base} text-[clamp(.85rem,1.4vw,1.15rem)] font-black text-white`}>
+        {name.slice(0, 1)}
+      </span>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      className={`${base} object-cover`}
+      onError={() => setFailed(true)}
+    />
   );
 }
