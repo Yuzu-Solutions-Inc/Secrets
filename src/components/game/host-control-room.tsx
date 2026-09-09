@@ -736,8 +736,8 @@ export function HostControlRoom({
                           {hintRows.length ? (
                             <ul className="space-y-2">
                               {hintRows.map((hint) => (
-                                <li key={String(hint.id)} className="rounded-2xl bg-white p-3">
-                                  {String(hint.kind) === "text" ? (
+                                <li key={String(hint.id)} className="space-y-2 rounded-2xl bg-white p-3">
+                                  {hint.text ? (
                                     <form action={editHint} className="flex flex-wrap items-center gap-2">
                                       <input type="hidden" name="locale" value={locale} />
                                       <input type="hidden" name="gameId" value={String(game.id)} />
@@ -745,10 +745,11 @@ export function HostControlRoom({
                                       <input className="field h-9 min-w-0 flex-1" name="text" defaultValue={String(hint.text ?? "")} required />
                                       <button className="pill pill-secondary h-9 shrink-0 text-xs">Save</button>
                                     </form>
-                                  ) : (
+                                  ) : null}
+                                  {hint.asset_path ? (
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img src={`/api/assets/hints/${String(hint.id)}`} alt="Image hint" className="max-h-32 rounded-xl" />
-                                  )}
+                                  ) : null}
                                   <div className="mt-1 flex items-center gap-3 text-xs">
                                     <span className="text-[var(--muted)]">#{Number(hint.position) + 1}{hint.released_at ? " · released" : ""}</span>
                                     <form action={deleteHint}>

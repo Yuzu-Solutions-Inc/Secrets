@@ -271,21 +271,24 @@ export async function addHint(formData: FormData) {
   const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
   if (!allowed) throw new Error("forbidden");
   const { count } = await supabase.from("hints").select("id", { count: "exact", head: true }).eq("secret_id", parsed.secretId);
-  let position = count ?? 0;
 
-  const rows: Record<string, unknown>[] = [];
-  if (parsed.text) {
-    rows.push({ secret_id: parsed.secretId, kind: "text", text: parsed.text, position: position++ });
-  }
+  // One deck entry, carrying text and/or an image (item 7). Renderers key off
+  // which columns are set; `kind` stays 'text' whenever there is any text.
+  let assetPath: string | null = null;
   if (image) {
     const { buffer, contentType } = await processImage(image, "hint");
-    const path = `games/${parsed.gameId}/hints/${crypto.randomUUID()}.webp`;
-    const { error: uploadError } = await createAdminClient().storage.from("game-assets").upload(path, buffer, { contentType });
+    assetPath = `games/${parsed.gameId}/hints/${crypto.randomUUID()}.webp`;
+    const { error: uploadError } = await createAdminClient().storage.from("game-assets").upload(assetPath, buffer, { contentType });
     if (uploadError) throw new Error(uploadError.message);
-    rows.push({ secret_id: parsed.secretId, kind: "image", asset_path: path, position: position++ });
   }
 
-  const { error } = await supabase.from("hints").insert(rows);
+  const { error } = await supabase.from("hints").insert({
+    secret_id: parsed.secretId,
+    kind: parsed.text ? "text" : "image",
+    text: parsed.text || null,
+    asset_path: assetPath,
+    position: count ?? 0,
+  });
   if (error) throw new Error(error.message);
   refresh(parsed.locale, parsed.gameId);
 }

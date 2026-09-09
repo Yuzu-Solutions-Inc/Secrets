@@ -52,6 +52,7 @@ type VaultHint = {
   id: string;
   kind: string;
   text: string | null;
+  has_image?: boolean;
   position: number;
   about_player_id: string | null;
   about_player_name: string | null;
@@ -465,8 +466,9 @@ export function PlayerDashboard(props: Props) {
               {selectedHints.length ? (
                 <ul className="mt-3 space-y-2">
                   {selectedHints.map((hint) => (
-                    <li key={hint.id} className="rounded-2xl bg-amber-50 p-3 text-sm">
-                      {hint.kind === "image" ? (
+                    <li key={hint.id} className="space-y-2 rounded-2xl bg-amber-50 p-3 text-sm">
+                      {hint.text ? <p>{hint.text}</p> : null}
+                      {hint.has_image || hint.kind === "image" ? (
                         <Image
                           className="h-auto w-full rounded-xl"
                           src={`/api/assets/hints/${hint.id}`}
@@ -475,9 +477,7 @@ export function PlayerDashboard(props: Props) {
                           height={500}
                           unoptimized
                         />
-                      ) : (
-                        hint.text
-                      )}
+                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -911,7 +911,7 @@ function MyGame(props: MyGameProps) {
               return (
                 <details key={String(grant.id)} className="rounded-2xl bg-amber-50 p-4">
                   <summary className="cursor-pointer font-bold">{String(hint?.text ?? "Image hint")}</summary>
-                  {hint?.kind === "image" ? (
+                  {hint?.asset_path || hint?.kind === "image" ? (
                     <Image
                       className="mt-3 h-auto w-full rounded-xl"
                       src={`/api/assets/hints/${String(hint.id)}`}
