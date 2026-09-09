@@ -45,6 +45,13 @@ export default async function HostPage({
     supabase.from("ledger_transactions").select("id,type,description,created_at,reversed_transaction_id,ledger_entries(amount,wallets(kind,player_id,game_players(profiles(display_name)),teams(name)))").eq("game_id", id).order("created_at", { ascending: false }).limit(50),
   ]);
 
+  // Dilemma answers, stacked per broadcast (item 14). game_event_responses has
+  // no game_id, so scope it by the game's own event ids.
+  const eventIds = (events ?? []).map((event) => event.id as string);
+  const { data: dilemmaResponses } = eventIds.length
+    ? await supabase.from("game_event_responses").select("game_event_id,choice").in("game_event_id", eventIds)
+    : { data: [] as { game_event_id: string; choice: string }[] };
+
   return (
     <HostControlRoom
       locale={locale}
@@ -58,6 +65,7 @@ export default async function HostPage({
       houseSecret={houseSecret}
       teams={teams ?? []}
       ledger={ledger ?? []}
+      dilemmaResponses={dilemmaResponses ?? []}
     />
   );
 }
