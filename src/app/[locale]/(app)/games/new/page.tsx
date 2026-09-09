@@ -3,6 +3,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { createGame } from "@/app/actions/game";
 import { getMemberships } from "@/lib/auth/session";
+import { secretCategories } from "@/lib/game/templates";
 
 export default async function NewGamePage({
   params,
@@ -46,6 +47,17 @@ export default async function NewGamePage({
             })}
           </div>
         </fieldset>
+        <label className="block font-bold">
+          {t("secretCategory")}
+          <select className="field mt-2" name="secretCategory" defaultValue="mixed">
+            {secretCategories.map((category) => (
+              <option key={category.key} value={category.key}>
+                {category.label[locale === "fr" ? "fr" : "en"]}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-sm font-normal text-[var(--muted)]">{t("secretCategoryHint")}</span>
+        </label>
         <p className="rounded-2xl bg-pink-50 p-4 text-sm text-[var(--muted)]">
           {t("templateNote")}
         </p>

@@ -63,7 +63,9 @@
     "quick": "Soirée express",
     "weekend": "Week-end",
     "custom": "Sur mesure",
-    "templateNote": "Le format définit l’économie et le calendrier des manches. Vous pourrez tout ajuster ensuite dans l’onglet Réglages de la partie."
+    "templateNote": "Le format définit l’économie et le calendrier des manches. Vous pourrez tout ajuster ensuite dans l’onglet Réglages de la partie.",
+    "secretCategory": "Pack de secrets",
+    "secretCategoryHint": "Les joueurs sans secret en reçoivent un tiré de ce pack, pour qu’une partie rapide démarre tout de suite."
   },
   "play": {
     "wallet": "Ma cagnotte",

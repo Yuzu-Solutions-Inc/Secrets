@@ -79,11 +79,13 @@ export async function createGame(formData: FormData) {
     organizationId: z.string().uuid(),
     title: z.string().trim().min(2).max(100),
     format: z.enum(["quick", "weekend", "custom"]),
+    secretCategory: z.string().trim().max(40).optional().default("mixed"),
     locale: localeSchema,
   }).parse({
     organizationId: formData.get("organizationId"),
     title: formData.get("title"),
     format: formData.get("format"),
+    secretCategory: formData.get("secretCategory"),
     locale: formData.get("locale"),
   });
   const user = await actor();
@@ -105,7 +107,11 @@ export async function createGame(formData: FormData) {
       starting_cash: economy.startingCash * 100,
       public_code: code,
       created_by: user.id,
-      settings: { economy: { accusationStake, hintPrice }, language: parsed.locale },
+      settings: {
+        economy: { accusationStake, hintPrice },
+        language: parsed.locale,
+        secretCategory: parsed.secretCategory || "mixed",
+      },
     })
     .select("id")
     .single();
