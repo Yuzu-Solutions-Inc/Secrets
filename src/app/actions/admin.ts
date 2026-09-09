@@ -162,6 +162,10 @@ export async function createMission(formData: FormData) {
     visibility: z.enum(["private", "team", "public"]),
     playerId: z.string().uuid().optional().or(z.literal("")),
     teamId: z.string().uuid().optional().or(z.literal("")),
+    assignAll: z.coerce.boolean().optional(),
+    // Optional countdown, in minutes from now. Missions still close only when
+    // the host says so (item 9); the deadline is a visual timer.
+    timerMinutes: z.coerce.number().int().min(0).max(1440).optional().default(0),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
   // Missions are always created as a hidden draft — including pre-assigned
@@ -174,9 +178,18 @@ export async function createMission(formData: FormData) {
     penalty: parsed.penalty * 100,
     visibility: parsed.visibility,
     status: "draft",
+    deadline: parsed.timerMinutes > 0 ? new Date(Date.now() + parsed.timerMinutes * 60_000).toISOString() : null,
   }).select("id").single();
   if (error) throw new Error(error.message);
-  if (parsed.playerId || parsed.teamId) {
+
+  if (parsed.assignAll) {
+    const { data: active } = await supabase.from("game_players").select("id").eq("game_id", parsed.gameId).eq("play_status", "active");
+    const rows = (active ?? []).map((p) => ({ mission_id: mission.id, player_id: p.id as string, team_id: null }));
+    if (rows.length) {
+      const { error: assignmentError } = await supabase.from("mission_assignments").insert(rows);
+      if (assignmentError) throw new Error(assignmentError.message);
+    }
+  } else if (parsed.playerId || parsed.teamId) {
     const { error: assignmentError } = await supabase.from("mission_assignments").insert({
       mission_id: mission.id,
       player_id: parsed.playerId || null,
