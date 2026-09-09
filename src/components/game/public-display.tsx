@@ -330,7 +330,7 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
     () => (
       <div
         key={safePage}
-        className="secrets-cards-page grid content-start gap-[clamp(.6rem,1.3vw,1.1rem)] overflow-y-auto"
+        className="secrets-cards-page grid content-start gap-[clamp(.6rem,1.3vw,1.1rem)] overflow-y-auto p-[clamp(6px,1vw,14px)]"
         style={{
           // Fixed-width cards (not `1fr`) so a table of 2 players reads the same
           // as a table of 9: uniform tiles, centred as a group, never stretched
@@ -346,8 +346,10 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
           return (
             <div
               key={String(player.id)}
-              className={`flex flex-col justify-center gap-[clamp(.3rem,.7vw,.55rem)] rounded-[18px] px-[clamp(.8rem,1.4vw,1.2rem)] py-[clamp(.65rem,1.1vw,1rem)] ${
-                revealed ? "bg-violet-100 ring-2 ring-violet-500" : "bg-pink-50 ring-1 ring-pink-100"
+              className={`flex flex-col justify-center gap-[clamp(.3rem,.7vw,.55rem)] rounded-[22px] border px-[clamp(.85rem,1.5vw,1.25rem)] py-[clamp(.7rem,1.15vw,1.05rem)] transition-colors duration-500 ${
+                revealed
+                  ? "border-violet-300 bg-[linear-gradient(150deg,#f5f0ff,#ffffff)] shadow-[0_12px_34px_rgba(124,58,237,.20)]"
+                  : "border-[color:var(--border)] bg-[linear-gradient(150deg,#fff5fa,#ffffff)] shadow-[0_12px_30px_rgba(190,18,111,.12)]"
               }`}
             >
               <div className="flex items-center gap-[clamp(.5rem,1vw,.8rem)]">
