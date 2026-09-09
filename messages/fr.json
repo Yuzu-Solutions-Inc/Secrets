@@ -102,6 +102,13 @@
     "sound": "Activer le son",
     "onBuzzer": "Au buzzer",
     "faceOff": "Confrontation",
-    "awaitingRuling": "En attente de la décision de l’hôte"
+    "awaitingRuling": "En attente de la décision de l’hôte",
+    "live": "En direct",
+    "theVerdict": "Le verdict",
+    "verdictCorrect": "Trouvé",
+    "verdictPartial": "Tout près",
+    "verdictWrong": "Raté",
+    "secretOut": "Secret dévoilé",
+    "hintsInVault": "Tous les indices sur {name} viennent d’arriver dans le Coffre"
   }
 }

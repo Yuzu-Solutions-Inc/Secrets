@@ -102,6 +102,13 @@
     "sound": "Toggle sound",
     "onBuzzer": "On the buzzer",
     "faceOff": "Face-off",
-    "awaitingRuling": "Awaiting the host's ruling"
+    "awaitingRuling": "Awaiting the host's ruling",
+    "live": "Live",
+    "theVerdict": "The verdict",
+    "verdictCorrect": "Cracked it",
+    "verdictPartial": "So close",
+    "verdictWrong": "Missed",
+    "secretOut": "Secret out",
+    "hintsInVault": "Every hint about {name} just dropped into the Vault"
   }
 }

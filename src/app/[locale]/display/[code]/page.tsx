@@ -33,6 +33,15 @@ export default async function DisplayPage({
       target: string | null;
     } | null;
     accusation_queue: number | null;
+    verdict: {
+      id: string;
+      result: "correct" | "partial" | "wrong";
+      theory: string;
+      resolved_at: string;
+      accuser: string | null;
+      target: string | null;
+      secret_revealed: boolean;
+    } | null;
   };
   return (
     <PublicDisplay
@@ -43,6 +52,7 @@ export default async function DisplayPage({
       latestEvent={dashboard.latest_event}
       accusation={dashboard.accusation ?? null}
       accusationQueue={dashboard.accusation_queue ?? 0}
+      verdict={dashboard.verdict ?? null}
     />
   );
 }
