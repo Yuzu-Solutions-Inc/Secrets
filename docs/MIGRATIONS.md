@@ -43,5 +43,9 @@ production grant/revoke state into a new migration. See
 
 `.github/workflows/ci.yml` starts a throwaway Postgres with
 `supabase db start` (which runs every migration plus the seed) and executes the
-pgTAP suites in `supabase/tests/` via `supabase test db`. A migration that does
-not apply cleanly, or that breaks an RLS boundary, fails the `db-tests` job.
+pgTAP suites in `supabase/tests/` via `supabase test db`.
+
+The `db-tests` job is currently `continue-on-error: true`: the shipped RLS
+policies recurse on a direct authenticated `SELECT`, so both pgTAP suites fail
+today. See [`KNOWN_ISSUES.md`](./KNOWN_ISSUES.md). Once that is fixed, make the
+job blocking so a migration that breaks an RLS boundary fails CI.

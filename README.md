@@ -116,7 +116,7 @@ Unit coverage includes dilemma matrices, accusation economics, winner formulas, 
 - **db-tests** — `supabase db start` (applies all migrations + seed) then `supabase test db` (pgTAP)
 - **e2e** — Playwright specs that do not need authentication, across phone, laptop and 16:9 viewports
 
-Merge through pull requests so these checks run; see [`docs/MIGRATIONS.md`](docs/MIGRATIONS.md) for the schema-change workflow.
+Merge through pull requests so these checks run; see [`docs/MIGRATIONS.md`](docs/MIGRATIONS.md) for the schema-change workflow and [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) for open defects (notably an RLS recursion that keeps `db-tests` non-blocking for now).
 
 ## Deployment
 
