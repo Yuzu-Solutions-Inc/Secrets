@@ -15,8 +15,10 @@ ERROR: infinite recursion detected in policy for relation "missions"
 ```
 
 Both `supabase/tests/secrets_rls.sql` (pre-existing) and
-`supabase/tests/knowledge_boundaries.sql` (new) reproduce it. The CI `db-tests`
-job is `continue-on-error: true` until this is fixed.
+`supabase/tests/knowledge_boundaries.sql` (new) reproduce it. In CI the
+`supabase test db` step is marked `continue-on-error: true`, so the `db-tests`
+job reports the failure in its logs but does not block the PR until this is
+fixed.
 
 ### Root cause
 

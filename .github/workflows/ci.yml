@@ -36,13 +36,6 @@ jobs:
   db-tests:
     name: pgTAP RLS (supabase local)
     runs-on: ubuntu-latest
-    # Non-blocking until the RLS recursion is fixed. The policies in
-    # 20260908034241_secrets_security_and_functions.sql reference each other
-    # across tables (secrets <-> secret_holders, missions <-> mission_assignments,
-    # ...), so a direct authenticated SELECT raises "infinite recursion detected
-    # in policy". Both this suite and the pre-existing secrets_rls.sql reproduce
-    # it. See docs/KNOWN_ISSUES.md.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
@@ -51,6 +44,14 @@ jobs:
       - name: Start local Postgres with migrations + seed
         run: supabase db start
       - name: Run database tests
+        # Reported, not enforced, until the RLS recursion is fixed. The policies
+        # in 20260908034241_secrets_security_and_functions.sql reference each
+        # other across tables (secrets <-> secret_holders, missions <->
+        # mission_assignments, ...), so a direct authenticated SELECT raises
+        # "infinite recursion detected in policy". Both this suite and the
+        # pre-existing secrets_rls.sql reproduce it. See docs/KNOWN_ISSUES.md;
+        # remove this line once the helpers land and the suites pass.
+        continue-on-error: true
         run: supabase test db
 
   e2e:
