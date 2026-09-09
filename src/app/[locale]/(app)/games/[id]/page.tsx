@@ -97,6 +97,29 @@ export default async function GamePage({
     .limit(1)
     .maybeSingle();
 
+  // House Secret accusation window: if the run-of-show has a House Secret round,
+  // the House can only be accused while it is live; otherwise it is always open.
+  const { data: houseRoundRows } = await supabase
+    .from("game_rounds")
+    .select("status")
+    .eq("game_id", id)
+    .eq("kind", "house_secret");
+  const houseFlag = (
+    (game.settings as Record<string, unknown> | null)?.houseSecret as
+      | Record<string, unknown>
+      | undefined
+  )?.enabled;
+  const houseSecretEnabled =
+    houseFlag === undefined
+      ? houseSecret != null && typeof houseSecret === "object"
+      : houseFlag === true;
+  const houseRounds = houseRoundRows ?? [];
+  const houseAccusationOpen =
+    houseSecretEnabled &&
+    (houseRounds.length > 0
+      ? houseRounds.some((r) => r.status === "live")
+      : true);
+
   const dilemmaIds = (dilemmaEvents ?? []).map((event) => event.id as string);
   const { data: myDilemmaResponses } = dilemmaIds.length
     ? await supabase.from("game_event_responses").select("game_event_id,choice").eq("player_id", currentPlayer.id).in("game_event_id", dilemmaIds)
@@ -155,6 +178,7 @@ export default async function GamePage({
         teamMember={teamMember}
         hintOffers={hintOffers ?? []}
         houseSecret={houseSecret && typeof houseSecret === "object" ? houseSecret as Record<string, unknown> : null}
+        houseAccusationOpen={houseAccusationOpen}
         activeBuzzes={activeBuzzes ?? []}
         vault={vault && typeof vault === "object" ? vault as Record<string, unknown> : null}
         dilemmas={dilemmas}

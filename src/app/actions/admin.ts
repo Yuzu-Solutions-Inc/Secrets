@@ -553,6 +553,7 @@ export async function updateGameSettings(formData: FormData) {
     location: z.string().trim().max(200).optional().default(""),
     startsAt: z.string().trim().optional().default(""),
     secretCategory: z.string().trim().max(40).optional().default("mixed"),
+    houseSecretEnabled: z.enum(["on"]).optional(),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
 
@@ -576,6 +577,10 @@ export async function updateGameSettings(formData: FormData) {
         language: parsed.language,
         location: parsed.location || null,
         secretCategory: parsed.secretCategory || "mixed",
+        houseSecret: {
+          ...(settings.houseSecret as Record<string, unknown> | undefined),
+          enabled: parsed.houseSecretEnabled === "on",
+        },
       },
     })
     .eq("id", parsed.gameId);
@@ -648,20 +653,109 @@ export async function createHouseSecret(formData: FormData) {
   refresh(parsed.locale, parsed.gameId);
 }
 
+// House Secret clues are managed exactly like a secret's hints (item 7 shape):
+// one entry carries optional text and/or an optional image, ordered by
+// `position`. They are created HELD — never released on insert and never for
+// sale. The host releases them one by one (`releaseHouseClue`) or lets
+// `releaseRandomHouseClue` pick one.
 export async function addHouseClue(formData: FormData) {
   const parsed = base.extend({
     houseSecretId: z.string().uuid(),
-    chapter: z.coerce.number().int().min(1).max(100),
-    text: z.string().trim().min(1).max(500),
+    text: z.string().trim().max(500).optional().default(""),
     isDecoy: z.enum(["on"]).optional(),
   }).parse(Object.fromEntries(formData));
+  const image = optionalImage(formData.get("image"));
+  if (!parsed.text && !image) throw new Error("clue_needs_content");
+
   const supabase = await createClient();
+  const { data: game } = await supabase
+    .from("house_secrets")
+    .select("game_id")
+    .eq("id", parsed.houseSecretId)
+    .maybeSingle();
+  if (!game) throw new Error("house_secret_not_found");
+  const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
+  if (!allowed) throw new Error("forbidden");
+
+  const { count } = await supabase
+    .from("house_secret_clues")
+    .select("id", { count: "exact", head: true })
+    .eq("house_secret_id", parsed.houseSecretId);
+
+  let assetPath: string | null = null;
+  if (image) {
+    const { buffer, contentType } = await processImage(image, "hint");
+    assetPath = `games/${parsed.gameId}/house-clues/${crypto.randomUUID()}.webp`;
+    const { error: uploadError } = await createAdminClient().storage.from("game-assets").upload(assetPath, buffer, { contentType });
+    if (uploadError) throw new Error(uploadError.message);
+  }
+
   const { error } = await supabase.from("house_secret_clues").insert({
     house_secret_id: parsed.houseSecretId,
-    chapter: parsed.chapter,
-    text: parsed.text,
+    position: count ?? 0,
+    text: parsed.text || null,
+    asset_path: assetPath,
     is_decoy: parsed.isDecoy === "on",
-    released_at: new Date().toISOString(),
+  });
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+export async function editHouseClue(formData: FormData) {
+  const parsed = base.extend({
+    clueId: z.string().uuid(),
+    text: z.string().trim().min(1).max(500),
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
+  if (!allowed) throw new Error("forbidden");
+  const { error } = await supabase
+    .from("house_secret_clues")
+    .update({ text: parsed.text })
+    .eq("id", parsed.clueId)
+    .not("text", "is", null);
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+export async function deleteHouseClue(formData: FormData) {
+  const parsed = base.extend({
+    clueId: z.string().uuid(),
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
+  if (!allowed) throw new Error("forbidden");
+  const { error } = await supabase.from("house_secret_clues").delete().eq("id", parsed.clueId);
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+// Release one specific held clue.
+export async function releaseHouseClue(formData: FormData) {
+  const parsed = base.extend({
+    clueId: z.string().uuid(),
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
+  if (!allowed) throw new Error("forbidden");
+  const { error } = await supabase
+    .from("house_secret_clues")
+    .update({ released_at: new Date().toISOString() })
+    .eq("id", parsed.clueId)
+    .is("released_at", null);
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+// Release a random held clue — the house clue "drop" the host triggers instead
+// of choosing which fragment comes next.
+export async function releaseRandomHouseClue(formData: FormData) {
+  const parsed = base.extend({
+    houseSecretId: z.string().uuid(),
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("release_random_house_clue", {
+    p_house_secret_id: parsed.houseSecretId,
   });
   if (error) throw new Error(error.message);
   refresh(parsed.locale, parsed.gameId);

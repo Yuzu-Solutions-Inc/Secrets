@@ -27,6 +27,7 @@ import {
   submitDilemmaChoice,
   savePlayerNote,
   saveHouseNote,
+  submitHouseTheory,
   shareHint,
   resolveHintOffer,
   revealMySecret,
@@ -112,6 +113,7 @@ type Props = {
   teamMember: Record<string, unknown> | null;
   hintOffers: Array<Record<string, unknown>>;
   houseSecret: Record<string, unknown> | null;
+  houseAccusationOpen: boolean;
   activeBuzzes: Array<Record<string, unknown>>;
   vault: Record<string, unknown> | null;
   dilemmas?: Array<{ id: string; prompt: string; option1: string; option2: string; myChoice: string | null }>;
@@ -125,6 +127,7 @@ export function PlayerDashboard(props: Props) {
   const [secretState, submitSecretAction] = useActionState(submitSecret, { success: false, error: null });
   const [buzzState, buzzFormAction] = useActionState(accusationBuzz, { success: false, error: null });
   const [hintState, hintFormAction] = useActionState(buyHint, { success: false, error: null });
+  const [houseState, houseFormAction] = useActionState(submitHouseTheory, { success: false, error: null });
   const targets = useMemo(
     () => props.players.filter((player) => player.id !== props.playerId),
     [props.players, props.playerId],
@@ -532,17 +535,58 @@ export function PlayerDashboard(props: Props) {
             <div>
               <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Fragments</p>
               {houseClues.length ? (
-                <div className="mt-3 flex flex-wrap gap-2">
+                <ul className="mt-3 space-y-2">
                   {houseClues.map((clue) => (
-                    <span key={String(clue.id)} className="rounded-full bg-violet-100 px-3 py-2 text-sm font-bold">
-                      {String(clue.text ?? "Image clue")}
-                    </span>
+                    <li key={String(clue.id)} className="space-y-2 rounded-2xl bg-violet-50 p-3 text-sm">
+                      {clue.text ? <p className="font-bold">{String(clue.text)}</p> : null}
+                      {clue.asset_path ? (
+                        <Image
+                          className="h-auto w-full rounded-xl"
+                          src={`/api/assets/house-clues/${String(clue.id)}`}
+                          alt="Clue"
+                          width={800}
+                          height={500}
+                          unoptimized
+                        />
+                      ) : null}
+                    </li>
                   ))}
-                </div>
+                </ul>
               ) : (
                 <p className="mt-2 text-sm text-[var(--muted)]">No fragments released yet.</p>
               )}
             </div>
+
+            {vault?.house && !vault.house.revealed ? (
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">{t("accuseHouse")}</p>
+                {props.houseAccusationOpen ? (
+                  <form action={houseFormAction} className="mt-3 space-y-2">
+                    <input type="hidden" name="locale" value={props.locale} />
+                    <input type="hidden" name="gameId" value={props.game.id} />
+                    <input type="hidden" name="houseSecretId" value={vault.house.id} />
+                    <input type="hidden" name="playerId" value={props.playerId} />
+                    <textarea
+                      className="field min-h-20 w-full"
+                      name="theory"
+                      required
+                      minLength={3}
+                      maxLength={500}
+                      placeholder={t("houseTheoryPlaceholder")}
+                    />
+                    {houseState.error ? (
+                      <p className="text-sm font-bold text-red-600">{houseState.error}</p>
+                    ) : null}
+                    {houseState.success ? (
+                      <p className="text-sm font-bold text-emerald-700">{t("houseTheorySubmitted")}</p>
+                    ) : null}
+                    <button className="pill pill-primary w-full">{t("accuseHouseCta")}</button>
+                  </form>
+                ) : (
+                  <p className="mt-2 text-sm text-[var(--muted)]">{t("houseClosed")}</p>
+                )}
+              </div>
+            ) : null}
 
             {vault?.house ? (
               <div>

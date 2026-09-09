@@ -58,6 +58,13 @@ export default async function NewGamePage({
           </select>
           <span className="mt-1 block text-sm font-normal text-[var(--muted)]">{t("secretCategoryHint")}</span>
         </label>
+        <label className="flex cursor-pointer gap-3 rounded-2xl border border-pink-100 bg-white p-4 has-[:checked]:border-pink-500 has-[:checked]:bg-pink-50">
+          <input className="mt-1 size-4 shrink-0 accent-pink-600" type="checkbox" name="houseSecret" defaultChecked />
+          <span>
+            <span className="block font-black">{t("houseSecret")}</span>
+            <span className="mt-1 block text-sm font-normal text-[var(--muted)]">{t("houseSecretHint")}</span>
+          </span>
+        </label>
         <p className="rounded-2xl bg-pink-50 p-4 text-sm text-[var(--muted)]">
           {t("templateNote")}
         </p>

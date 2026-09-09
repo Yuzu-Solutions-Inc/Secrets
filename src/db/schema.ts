@@ -399,12 +399,18 @@ export const houseSecretClues = pgTable("house_secret_clues", {
   id: uuid("id").defaultRandom().primaryKey(),
   houseSecretId: uuid("house_secret_id").notNull().references(() => houseSecrets.id, { onDelete: "cascade" }),
   chapter: integer("chapter").notNull().default(1),
+  // Ordered like hints.position; the host arranges clues and releases them one
+  // by one (or at random). Never sold.
+  position: integer("position").notNull().default(0),
   text: text("text"),
   assetPath: text("asset_path"),
   isDecoy: boolean("is_decoy").notNull().default(false),
   releasedAt: timestamp("released_at", { withTimezone: true }),
   createdAt: timestamps.createdAt,
-});
+}, (table) => [
+  check("house_secret_clue_has_content", sql`${table.text} is not null or ${table.assetPath} is not null`),
+  uniqueIndex("house_secret_clue_position_unique").on(table.houseSecretId, table.position),
+]);
 
 export const houseSecretSubmissions = pgTable("house_secret_submissions", {
   id: uuid("id").defaultRandom().primaryKey(),

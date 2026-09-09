@@ -36,6 +36,10 @@ import {
   editSecret,
   deleteHint,
   addHouseClue,
+  editHouseClue,
+  deleteHouseClue,
+  releaseHouseClue,
+  releaseRandomHouseClue,
   assignPower,
   addRound,
   adjustWallet,
@@ -276,6 +280,20 @@ export function HostControlRoom({
   const finaleCfg = (settings.finale ?? {}) as Row;
   const finaleEntry = (finaleCfg.entry ?? {}) as Row;
   const finaleRes = (finaleCfg.resolution ?? {}) as Row;
+  // The House Secret is opt-in per game (builder + Settings). An explicit
+  // enabled:false wins; a missing flag (older games) falls back to "on" when a
+  // house_secret row already exists so nothing regresses.
+  const houseSecretCfg = (settings.houseSecret ?? {}) as Row;
+  const houseEnabled =
+    houseSecretCfg.enabled === undefined
+      ? Boolean(houseSecret)
+      : houseSecretCfg.enabled === true;
+  const houseClueRows = houseSecret
+    ? [...(((houseSecret.house_secret_clues as Row[] | null) ?? []))].sort(
+        (a, b) => Number(a.position) - Number(b.position),
+      )
+    : [];
+  const heldClueCount = houseClueRows.filter((clue) => !clue.released_at).length;
 
   return (
     <section className="mx-auto max-w-5xl pb-20">
@@ -741,35 +759,106 @@ export function HostControlRoom({
                 </span>
               </div>
 
-              <details className="bubble-card overflow-hidden" open={!houseSecret}>
+              <details className="bubble-card overflow-hidden" open={houseEnabled && !houseSecret}>
                 <summary className="flex cursor-pointer items-center gap-2 p-4 font-black">
-                  <Lightbulb className="text-amber-500" size={18} /> House Secret {houseSecret ? "" : "— not set"}
+                  <Lightbulb className="text-amber-500" size={18} /> House Secret{" "}
+                  {!houseEnabled ? "— off" : houseSecret ? "" : "— not set"}
                 </summary>
                 <div className="border-t border-pink-100 p-5">
-                  <form action={createHouseSecret} className="grid gap-3 sm:grid-cols-2">
-                    <input type="hidden" name="locale" value={locale} />
-                    <input type="hidden" name="gameId" value={String(game.id)} />
-                    <textarea className="field min-h-24 sm:col-span-2" name="answer" required defaultValue={houseSecret ? String(houseSecret.answer) : ""} placeholder="The game-wide mystery answer…" />
-                    <select className="field" name="mode" defaultValue={houseSecret ? String(houseSecret.mode) : "hybrid"}>
-                      <option value="competitive">Competitive</option><option value="cooperative">Cooperative</option><option value="hybrid">Hybrid</option>
-                    </select>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input className="field" name="vault" type="number" min="0" defaultValue={houseSecret ? Number(houseSecret.vault) / 100 : 10000} aria-label="Vault" />
-                      <input className="field" name="attemptCost" type="number" min="0" defaultValue={houseSecret ? Number(houseSecret.attempt_cost) / 100 : 1000} aria-label="Attempt cost" />
-                    </div>
-                    <button className="pill pill-primary sm:col-span-2">Save House Secret</button>
-                  </form>
-                  {houseSecret ? (
-                    <form action={addHouseClue} className="mt-5 grid gap-3 border-t border-pink-100 pt-5 sm:grid-cols-[6rem_1fr_auto_auto]">
-                      <input type="hidden" name="locale" value={locale} />
-                      <input type="hidden" name="gameId" value={String(game.id)} />
-                      <input type="hidden" name="houseSecretId" value={String(houseSecret.id)} />
-                      <input className="field" name="chapter" type="number" min="1" defaultValue="1" aria-label="Chapter" />
-                      <input className="field" name="text" required placeholder="A clue fragment…" />
-                      <label className="flex items-center gap-2 rounded-xl bg-pink-50 px-3 font-bold"><input type="checkbox" name="isDecoy" /> Decoy</label>
-                      <button className="pill pill-secondary">Release clue</button>
-                    </form>
-                  ) : null}
+                  {!houseEnabled ? (
+                    <p className="text-sm text-[var(--muted)]">
+                      Turn on <span className="font-bold">Activate House Secret</span> in the Settings tab to seed the game-wide mystery and its clues.
+                    </p>
+                  ) : (
+                    <>
+                      <form action={createHouseSecret} className="grid gap-3 sm:grid-cols-2">
+                        <input type="hidden" name="locale" value={locale} />
+                        <input type="hidden" name="gameId" value={String(game.id)} />
+                        <textarea className="field min-h-24 sm:col-span-2" name="answer" required defaultValue={houseSecret ? String(houseSecret.answer) : ""} placeholder="The game-wide mystery answer…" />
+                        <select className="field" name="mode" defaultValue={houseSecret ? String(houseSecret.mode) : "hybrid"}>
+                          <option value="competitive">Competitive</option><option value="cooperative">Cooperative</option><option value="hybrid">Hybrid</option>
+                        </select>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input className="field" name="vault" type="number" min="0" defaultValue={houseSecret ? Number(houseSecret.vault) / 100 : 10000} aria-label="Vault" />
+                          <input className="field" name="attemptCost" type="number" min="0" defaultValue={houseSecret ? Number(houseSecret.attempt_cost) / 100 : 1000} aria-label="Attempt cost" />
+                        </div>
+                        <button className="pill pill-primary sm:col-span-2">Save House Secret</button>
+                      </form>
+
+                      {houseSecret ? (
+                        <div className="mt-5 space-y-3 border-t border-pink-100 pt-5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-black">Clues</p>
+                            <span className="text-xs text-[var(--muted)]">
+                              managed like secret hints · never for sale · released by the host
+                            </span>
+                            <form action={releaseRandomHouseClue} className="ml-auto">
+                              <input type="hidden" name="locale" value={locale} />
+                              <input type="hidden" name="gameId" value={String(game.id)} />
+                              <input type="hidden" name="houseSecretId" value={String(houseSecret.id)} />
+                              <button className="pill pill-secondary h-9 text-xs" disabled={heldClueCount === 0}>
+                                Release random clue{heldClueCount ? ` (${heldClueCount} held)` : ""}
+                              </button>
+                            </form>
+                          </div>
+
+                          {houseClueRows.length ? (
+                            <ul className="space-y-2">
+                              {houseClueRows.map((clue) => (
+                                <li key={String(clue.id)} className="space-y-2 rounded-2xl bg-white p-3">
+                                  {clue.text ? (
+                                    <form action={editHouseClue} className="flex flex-wrap items-center gap-2">
+                                      <input type="hidden" name="locale" value={locale} />
+                                      <input type="hidden" name="gameId" value={String(game.id)} />
+                                      <input type="hidden" name="clueId" value={String(clue.id)} />
+                                      <input className="field h-9 min-w-0 flex-1" name="text" defaultValue={String(clue.text ?? "")} required />
+                                      <button className="pill pill-secondary h-9 shrink-0 text-xs">Save</button>
+                                    </form>
+                                  ) : null}
+                                  {clue.asset_path ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={`/api/assets/house-clues/${String(clue.id)}`} alt="Image clue" className="max-h-32 rounded-xl" />
+                                  ) : null}
+                                  <div className="mt-1 flex flex-wrap items-center gap-3 text-xs">
+                                    <span className="text-[var(--muted)]">
+                                      #{Number(clue.position) + 1}
+                                      {clue.is_decoy ? " · decoy" : ""}
+                                      {clue.released_at ? " · released" : " · held"}
+                                    </span>
+                                    {!clue.released_at ? (
+                                      <form action={releaseHouseClue}>
+                                        <input type="hidden" name="locale" value={locale} />
+                                        <input type="hidden" name="gameId" value={String(game.id)} />
+                                        <input type="hidden" name="clueId" value={String(clue.id)} />
+                                        <button className="font-black text-emerald-700 hover:underline">Release</button>
+                                      </form>
+                                    ) : null}
+                                    <form action={deleteHouseClue}>
+                                      <input type="hidden" name="locale" value={locale} />
+                                      <input type="hidden" name="gameId" value={String(game.id)} />
+                                      <input type="hidden" name="clueId" value={String(clue.id)} />
+                                      <button className="font-black text-red-600 hover:underline">Delete</button>
+                                    </form>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : <p className="text-xs text-[var(--muted)]">No clues yet.</p>}
+
+                          <form action={addHouseClue} className="grid gap-2 rounded-2xl bg-white p-3 sm:grid-cols-[1fr_auto]">
+                            <input type="hidden" name="locale" value={locale} />
+                            <input type="hidden" name="gameId" value={String(game.id)} />
+                            <input type="hidden" name="houseSecretId" value={String(houseSecret.id)} />
+                            <input className="field h-9" name="text" placeholder="Text clue (optional)" />
+                            <button className="pill pill-primary h-9 text-xs sm:row-span-3">Add clue</button>
+                            <input className="field h-9 text-xs" type="file" name="image" accept="image/png,image/jpeg,image/webp" />
+                            <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" name="isDecoy" /> Decoy</label>
+                            <p className="text-xs text-[var(--muted)] sm:col-span-2">Fill the text, attach an image, or both. New clues stay held until you release them.</p>
+                          </form>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
                 </div>
               </details>
 
@@ -1210,6 +1299,15 @@ export function HostControlRoom({
                     <option key={category.key} value={category.key}>{category.label[locale === "fr" ? "fr" : "en"]}</option>
                   ))}
                 </select>
+              </label>
+              <label className="flex items-start gap-3 sm:col-span-2">
+                <input className="mt-1 size-4 shrink-0 accent-pink-600" type="checkbox" name="houseSecretEnabled" defaultChecked={houseEnabled} />
+                <span>
+                  <span className="block font-bold">Activate House Secret</span>
+                  <span className="mt-1 block text-sm font-normal text-[var(--muted)]">
+                    A game-wide mystery seeded on the Secrets tab. Clues are released by the host (never bought). If the run-of-show has a House Secret round, the House can only be accused during it — otherwise, any time.
+                  </span>
+                </span>
               </label>
               <button className="pill pill-primary sm:col-span-2">Save settings</button>
             </form>
