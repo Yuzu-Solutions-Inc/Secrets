@@ -171,11 +171,13 @@ export async function validateMission(formData: FormData) {
   refresh(parsed.locale, parsed.gameId);
 }
 
+// Every hint costs the same — the price is set once in the base game settings
+// (`hintPrice` in the round config) and applied by `buy_next_hint`. Hints
+// therefore carry no per-hint price; `default_price` stays 0.
 export async function addHint(formData: FormData) {
   const parsed = base.extend({
     secretId: z.string().uuid(),
     text: z.string().trim().min(1).max(500),
-    price: z.coerce.number().int().min(0),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
   const { count } = await supabase.from("hints").select("id", { count: "exact", head: true }).eq("secret_id", parsed.secretId);
@@ -183,9 +185,33 @@ export async function addHint(formData: FormData) {
     secret_id: parsed.secretId,
     kind: "text",
     text: parsed.text,
-    default_price: parsed.price * 100,
     position: count ?? 0,
   });
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+export async function editHint(formData: FormData) {
+  const parsed = base.extend({
+    hintId: z.string().uuid(),
+    text: z.string().trim().min(1).max(500),
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
+  if (!allowed) throw new Error("forbidden");
+  const { error } = await supabase.from("hints").update({ text: parsed.text }).eq("id", parsed.hintId).eq("kind", "text");
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+export async function deleteHint(formData: FormData) {
+  const parsed = base.extend({
+    hintId: z.string().uuid(),
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
+  if (!allowed) throw new Error("forbidden");
+  const { error } = await supabase.from("hints").delete().eq("id", parsed.hintId);
   if (error) throw new Error(error.message);
   refresh(parsed.locale, parsed.gameId);
 }
@@ -201,7 +227,6 @@ function checkedImage(value: FormDataEntryValue | null) {
 export async function addImageHint(formData: FormData) {
   const parsed = base.extend({
     secretId: z.string().uuid(),
-    price: z.coerce.number().int().min(0),
   }).parse(Object.fromEntries(formData));
   const file = checkedImage(formData.get("image"));
   const supabase = await createClient();
@@ -215,7 +240,6 @@ export async function addImageHint(formData: FormData) {
     secret_id: parsed.secretId,
     kind: "image",
     asset_path: path,
-    default_price: parsed.price * 100,
     position: count ?? 0,
   });
   if (error) throw new Error(error.message);
