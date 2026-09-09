@@ -120,14 +120,13 @@ export async function deleteRound(formData: FormData) {
 
 export async function createTeam(formData: FormData) {
   const parsed = base.extend({
-    roundId: z.string().uuid(),
     name: z.string().trim().min(1).max(60),
     openingCash: z.coerce.number().int().min(0),
   }).parse(Object.fromEntries(formData));
   const playerIds = z.array(z.string().uuid()).min(1).parse(formData.getAll("playerIds"));
   const supabase = await createClient();
   const { data: team, error } = await supabase.from("teams").insert({
-    round_id: parsed.roundId,
+    game_id: parsed.gameId,
     name: parsed.name,
   }).select("id").single();
   if (error) throw new Error(error.message);
@@ -149,6 +148,30 @@ export async function settleTeamDilemma(formData: FormData) {
   const parsed = base.extend({ teamId: z.string().uuid() }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
   const { error } = await supabase.rpc("settle_team_dilemma", { p_team_id: parsed.teamId });
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+// Replace a team's whole membership (item 1 — editable any time).
+export async function setTeamMembers(formData: FormData) {
+  const parsed = base.extend({ teamId: z.string().uuid() }).parse(Object.fromEntries(formData));
+  const playerIds = z.array(z.string().uuid()).parse(formData.getAll("playerIds"));
+  const supabase = await createClient();
+  const { error: clearError } = await supabase.from("team_members").delete().eq("team_id", parsed.teamId);
+  if (clearError) throw new Error(clearError.message);
+  if (playerIds.length) {
+    const { error } = await supabase.from("team_members").insert(
+      playerIds.map((playerId) => ({ team_id: parsed.teamId, player_id: playerId })),
+    );
+    if (error) throw new Error(error.message);
+  }
+  refresh(parsed.locale, parsed.gameId);
+}
+
+export async function deleteTeam(formData: FormData) {
+  const parsed = base.extend({ teamId: z.string().uuid() }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.from("teams").delete().eq("id", parsed.teamId);
   if (error) throw new Error(error.message);
   refresh(parsed.locale, parsed.gameId);
 }

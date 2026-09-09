@@ -240,7 +240,10 @@ export const gameRounds = pgTable("game_rounds", {
 
 export const teams = pgTable("teams", {
   id: uuid("id").defaultRandom().primaryKey(),
-  roundId: uuid("round_id").notNull().references(() => gameRounds.id, { onDelete: "cascade" }),
+  // Teams are game-scoped (item 1). round_id is an optional, nullable hint
+  // kept for compatibility; new teams don't set it.
+  gameId: uuid("game_id").notNull().references(() => games.id, { onDelete: "cascade" }),
+  roundId: uuid("round_id").references(() => gameRounds.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   color: text("color"),
   createdAt: timestamps.createdAt,

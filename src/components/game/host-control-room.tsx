@@ -36,6 +36,8 @@ import {
   createMission,
   createTeam,
   deleteRound,
+  deleteTeam,
+  setTeamMembers,
   duplicateRound,
   fillBankSecrets,
   moveRound,
@@ -339,6 +341,78 @@ export function HostControlRoom({
               );
               })}
             </div>
+
+            <div className="bubble-card p-5">
+              <div className="flex items-center gap-2 font-black"><Users size={18} className="text-pink-600" /> Teams</div>
+              <p className="mt-1 text-sm text-[var(--muted)]">One set of teams for the whole game. Edit membership any time; team rounds use whatever the teams are then.</p>
+              {teams.length ? (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {teams.map((team) => {
+                    const walletRows = team.wallets as Row[] | null;
+                    const memberRows = (team.team_members as Row[] | null) ?? [];
+                    return (
+                      <div key={String(team.id)} className="rounded-2xl bg-pink-50 p-4">
+                        <p className="font-black">{String(team.name)}</p>
+                        <p className="text-sm text-[var(--muted)]">{formatMoney(Number(walletRows?.[0]?.balance ?? 0), String(game.currency_symbol))} · {memberRows.length} member{memberRows.length === 1 ? "" : "s"}</p>
+                        <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                          {memberRows.map((m) => String(((m.game_players as Row | null)?.profiles as Row | null)?.display_name ?? "Player")).join(", ") || "No members"}
+                        </p>
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-xs font-bold text-pink-600">Edit members</summary>
+                          <form action={setTeamMembers} className="mt-2 grid gap-2">
+                            <input type="hidden" name="locale" value={locale} />
+                            <input type="hidden" name="gameId" value={String(game.id)} />
+                            <input type="hidden" name="teamId" value={String(team.id)} />
+                            <div className="grid grid-cols-2 gap-1">
+                              {players.map((player) => {
+                                const profile = player.profiles as Row | null;
+                                const isMember = memberRows.some((m) => String(m.player_id) === String(player.id));
+                                return <label key={String(player.id)} className="rounded-lg bg-white p-1.5 text-xs"><input className="mr-1.5" type="checkbox" name="playerIds" value={String(player.id)} defaultChecked={isMember} />{String(profile?.display_name ?? "Player")}</label>;
+                              })}
+                            </div>
+                            <button className="pill pill-secondary h-8 w-fit text-xs">Save members</button>
+                          </form>
+                        </details>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <form action={settleTeamDilemma}>
+                            <input type="hidden" name="locale" value={locale} />
+                            <input type="hidden" name="gameId" value={String(game.id)} />
+                            <input type="hidden" name="teamId" value={String(team.id)} />
+                            <button className="pill pill-secondary h-8 text-xs">Reveal &amp; settle dilemma</button>
+                          </form>
+                          <form action={deleteTeam}>
+                            <input type="hidden" name="locale" value={locale} />
+                            <input type="hidden" name="gameId" value={String(game.id)} />
+                            <input type="hidden" name="teamId" value={String(team.id)} />
+                            <button className="text-xs font-black text-red-600 hover:underline">Delete</button>
+                          </form>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+              <details className="mt-3">
+                <summary className="cursor-pointer font-bold">New team</summary>
+                <form action={createTeam} className="mt-3 grid gap-3">
+                  <input type="hidden" name="locale" value={locale} />
+                  <input type="hidden" name="gameId" value={String(game.id)} />
+                  <input className="field" name="name" placeholder="Team name" required />
+                  <input className="field" name="openingCash" type="number" min="0" defaultValue="10000" placeholder="Opening team pot" />
+                  <fieldset>
+                    <legend className="font-bold">Members</legend>
+                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {players.map((player) => {
+                        const profile = player.profiles as Row | null;
+                        return <label key={String(player.id)} className="rounded-xl bg-white p-2 text-sm"><input className="mr-2" type="checkbox" name="playerIds" value={String(player.id)} />{String(profile?.display_name ?? "Player")}</label>;
+                      })}
+                    </div>
+                  </fieldset>
+                  <button className="pill pill-primary w-fit">Create team</button>
+                </form>
+              </details>
+            </div>
+
             <details className="bubble-card overflow-hidden">
               <summary className="cursor-pointer p-4 font-black">Full ledger &amp; audit</summary>
               <div className="divide-y divide-pink-100 border-t border-pink-100">
@@ -388,49 +462,6 @@ export function HostControlRoom({
               <input className="field" name="durationMinutes" type="number" min="1" defaultValue="45" required />
               <button className="pill pill-primary">Add</button>
             </form>
-            {rounds.some((round) => round.kind === "team") ? (
-              <details className="bubble-card p-5">
-                <summary className="cursor-pointer font-black">Create a team</summary>
-                <form action={createTeam} className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <input type="hidden" name="locale" value={locale} />
-                  <input type="hidden" name="gameId" value={String(game.id)} />
-                  <input className="field" name="name" placeholder="Team name" required />
-                  <select className="field" name="roundId" required>
-                    {rounds.filter((round) => round.kind === "team").map((round) => <option key={String(round.id)} value={String(round.id)}>{String(round.title)}</option>)}
-                  </select>
-                  <input className="field sm:col-span-2" name="openingCash" type="number" min="0" defaultValue="10000" placeholder="Opening team pot" />
-                  <fieldset className="sm:col-span-2">
-                    <legend className="font-bold">Members</legend>
-                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {players.map((player) => {
-                        const profile = player.profiles as Row | null;
-                        return <label key={String(player.id)} className="rounded-xl bg-pink-50 p-3"><input className="mr-2" type="checkbox" name="playerIds" value={String(player.id)} />{String(profile?.display_name ?? "Player")}</label>;
-                      })}
-                    </div>
-                  </fieldset>
-                  <button className="pill pill-primary sm:col-span-2">Create team</button>
-                </form>
-              </details>
-            ) : null}
-            {teams.length ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {teams.map((team) => {
-                  const walletRows = team.wallets as Row[] | null;
-                  return (
-                    <div key={String(team.id)} className="bubble-card p-4">
-                      <p className="font-black">{String(team.name)}</p>
-                      <p className="text-sm text-[var(--muted)]">{formatMoney(Number(walletRows?.[0]?.balance ?? 0), String(game.currency_symbol))}</p>
-                      <form action={settleTeamDilemma} className="mt-3">
-                        <input type="hidden" name="locale" value={locale} />
-                        <input type="hidden" name="gameId" value={String(game.id)} />
-                        <input type="hidden" name="teamId" value={String(team.id)} />
-                        <button className="pill pill-secondary w-full">Reveal & settle dilemma</button>
-                      </form>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
             <div className="bubble-card divide-y divide-pink-100 overflow-hidden">
               {(() => {
                 const currentPos = currentRound ? Number(currentRound.position) : -1;
