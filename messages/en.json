@@ -63,7 +63,9 @@
     "quick": "Quick Night",
     "weekend": "Weekend",
     "custom": "Custom",
-    "templateNote": "The format sets the economy and the round schedule. You can fine-tune everything later in the game's Settings tab."
+    "templateNote": "The format sets the economy and the round schedule. You can fine-tune everything later in the game's Settings tab.",
+    "secretCategory": "Secret pack",
+    "secretCategoryHint": "Players with no secret of their own are given one from this pack, so a quick game can start right away."
   },
   "play": {
     "wallet": "My wallet",

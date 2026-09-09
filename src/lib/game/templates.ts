@@ -120,3 +120,22 @@ export const formatEconomy: Record<GameFormat, FormatEconomy> = {
   weekend: { startingCash: 1000, accusationStake: 1000, hintPrice: 750 },
   custom: { startingCash: 1500, accusationStake: 1000, hintPrice: 750 },
 };
+
+// Categories for the ready-made secret bank. "mixed" draws from all of them.
+// Labels are bilingual so the picker works in either locale without a
+// message-catalog round-trip.
+export const secretCategories = [
+  { key: "mixed", label: { en: "Mixed", fr: "Mélangé" } },
+  { key: "family", label: { en: "Family", fr: "Famille" } },
+  { key: "kids", label: { en: "Kids", fr: "Enfants" } },
+  { key: "couples", label: { en: "Couples", fr: "Couples" } },
+  { key: "girls_night", label: { en: "Girls' night", fr: "Soirée entre filles" } },
+  { key: "guys_night", label: { en: "Guys' night", fr: "Soirée entre gars" } },
+  { key: "work_party", label: { en: "Work party", fr: "Fête de bureau" } },
+  { key: "awkward", label: { en: "Awkward", fr: "Gênant" } },
+  { key: "wholesome", label: { en: "Wholesome", fr: "Attendrissant" } },
+  { key: "dark", label: { en: "Dark secrets", fr: "Secrets sombres" } },
+  { key: "spicy", label: { en: "18+", fr: "18+" } },
+] as const;
+
+export type SecretCategory = (typeof secretCategories)[number]["key"];

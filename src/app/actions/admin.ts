@@ -327,7 +327,7 @@ export async function assignPower(formData: FormData) {
 export async function setPlayerPlayStatus(formData: FormData) {
   const parsed = base.extend({
     playerId: z.string().uuid(),
-    status: z.enum(["active", "eliminated"]),
+    status: z.enum(["active", "inactive", "eliminated", "spectator"]),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
   const { error } = await supabase.rpc("set_player_play_status", {
@@ -335,6 +335,16 @@ export async function setPlayerPlayStatus(formData: FormData) {
     p_player_id: parsed.playerId,
     p_status: parsed.status,
   });
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+// Host action: give every active player without a secret a random unused entry
+// from the chosen secret bank category (item 21).
+export async function fillBankSecrets(formData: FormData) {
+  const parsed = base.parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fill_bank_secrets", { p_game_id: parsed.gameId });
   if (error) throw new Error(error.message);
   refresh(parsed.locale, parsed.gameId);
 }
@@ -347,6 +357,7 @@ export async function updateGameSettings(formData: FormData) {
     language: z.enum(["en", "fr"]),
     location: z.string().trim().max(200).optional().default(""),
     startsAt: z.string().trim().optional().default(""),
+    secretCategory: z.string().trim().max(40).optional().default("mixed"),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
 
@@ -369,6 +380,7 @@ export async function updateGameSettings(formData: FormData) {
         economy: { accusationStake, hintPrice },
         language: parsed.language,
         location: parsed.location || null,
+        secretCategory: parsed.secretCategory || "mixed",
       },
     })
     .eq("id", parsed.gameId);

@@ -456,3 +456,29 @@ export const auditEvents = pgTable("audit_events", {
   metadata: jsonb("metadata").notNull().default({}),
   createdAt: timestamps.createdAt,
 });
+
+// Curated pool of ready-made secrets, chosen by category at game creation so a
+// Quick Night can start without every player typing one. Prompt content only —
+// readable by any authenticated user, written by the seed / service role.
+export const secretBank = pgTable("secret_bank", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  category: text("category").notNull(),
+  locale: text("locale").notNull().default("en"),
+  text: text("text").notNull(),
+  createdAt: timestamps.createdAt,
+}, (table) => [
+  uniqueIndex("secret_bank_unique").on(table.category, table.locale, table.text),
+]);
+
+// One player's answer to a broadcast dilemma (option_1 / option_2). The host
+// reads every row for their game; a player reads and writes only their own.
+export const gameEventResponses = pgTable("game_event_responses", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  gameEventId: uuid("game_event_id").notNull().references(() => gameEvents.id, { onDelete: "cascade" }),
+  playerId: uuid("player_id").notNull().references(() => gamePlayers.id, { onDelete: "cascade" }),
+  choice: text("choice").notNull(),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("game_event_responses_unique").on(table.gameEventId, table.playerId),
+  check("game_event_response_choice", sql`${table.choice} in ('option_1', 'option_2')`),
+]);

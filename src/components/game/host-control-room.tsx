@@ -37,6 +37,7 @@ import {
   createMission,
   createTeam,
   duplicateRound,
+  fillBankSecrets,
   moveRound,
   publishEvent,
   replaceSecret,
@@ -50,6 +51,7 @@ import {
 } from "@/app/actions/admin";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
+import { secretCategories } from "@/lib/game/templates";
 import { InvitePlayerForm } from "./invite-player-form";
 
 type Row = Record<string, unknown>;
@@ -214,8 +216,10 @@ export function HostControlRoom({
               const pid = String(player.id);
               const open = openLedgerPlayer === pid;
               const tx = open ? playerTransactions(ledger, pid) : [];
+              const playStatus = String(player.play_status ?? "active");
+              const active = playStatus === "active";
               return (
-                <article key={pid} className="bubble-card p-5">
+                <article key={pid} className={`bubble-card p-5 ${active ? "" : "opacity-70"}`}>
                   <div className="flex items-center gap-3">
                     <span className="grid size-12 place-items-center rounded-full bg-pink-100 font-black text-pink-700">
                       {String(profile?.display_name ?? "?").slice(0, 1).toUpperCase()}
@@ -227,8 +231,10 @@ export function HostControlRoom({
                   </div>
                   <div className="mt-5 flex items-end justify-between">
                     <p className="display text-2xl font-black">{formatMoney(Number(wallets?.[0]?.balance ?? 0), String(game.currency_symbol))}</p>
-                    <span className={`rounded-full px-2 py-1 text-xs font-bold ${player.is_ready ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
-                      {player.is_ready ? "Ready" : "Waiting"}
+                    <span className={`rounded-full px-2 py-1 text-xs font-bold ${
+                      !active ? "bg-[var(--muted-bg,#eee)] text-[var(--muted)]" : player.is_ready ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                    }`}>
+                      {active ? (player.is_ready ? "Ready" : "Waiting") : playStatus === "inactive" ? "Inactive" : playStatus === "spectator" ? "Spectator" : "Eliminated"}
                     </span>
                   </div>
                   <button
@@ -255,15 +261,26 @@ export function HostControlRoom({
                       )) : <li className="text-xs text-[var(--muted)]">No transactions yet.</li>}
                     </ul>
                   ) : null}
-                  <form action={setPlayerPlayStatus} className="mt-3">
-                    <input type="hidden" name="locale" value={locale} />
-                    <input type="hidden" name="gameId" value={String(game.id)} />
-                    <input type="hidden" name="playerId" value={pid} />
-                    <input type="hidden" name="status" value={player.play_status === "eliminated" ? "active" : "eliminated"} />
-                    <button className="w-full text-xs font-bold text-[var(--muted)] underline">
-                      {player.play_status === "eliminated" ? "Return to active play" : "Eliminate (elimination round only)"}
-                    </button>
-                  </form>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <form action={setPlayerPlayStatus}>
+                      <input type="hidden" name="locale" value={locale} />
+                      <input type="hidden" name="gameId" value={String(game.id)} />
+                      <input type="hidden" name="playerId" value={pid} />
+                      <input type="hidden" name="status" value={active ? "inactive" : "active"} />
+                      <button className="text-xs font-bold text-pink-600 underline">
+                        {active ? "Deactivate (can't come)" : "Reactivate"}
+                      </button>
+                    </form>
+                    {active ? (
+                      <form action={setPlayerPlayStatus}>
+                        <input type="hidden" name="locale" value={locale} />
+                        <input type="hidden" name="gameId" value={String(game.id)} />
+                        <input type="hidden" name="playerId" value={pid} />
+                        <input type="hidden" name="status" value="eliminated" />
+                        <button className="text-xs font-bold text-[var(--muted)] underline">Eliminate (elimination round)</button>
+                      </form>
+                    ) : null}
+                  </div>
                 </article>
               );
               })}
@@ -762,7 +779,22 @@ export function HostControlRoom({
               <label className="font-bold">Location
                 <input className="field mt-1" name="location" defaultValue={String(settings.location ?? "")} placeholder="The Pink House, 12 Rose St." />
               </label>
+              <label className="font-bold">Secret pack
+                <select className="field mt-1" name="secretCategory" defaultValue={String(settings.secretCategory ?? "mixed")}>
+                  {secretCategories.map((category) => (
+                    <option key={category.key} value={category.key}>{category.label[locale === "fr" ? "fr" : "en"]}</option>
+                  ))}
+                </select>
+              </label>
               <button className="pill pill-primary sm:col-span-2">Save settings</button>
+            </form>
+
+            <form action={fillBankSecrets} className="bubble-card grid gap-2 p-6">
+              <h3 className="font-black">Auto-fill secrets</h3>
+              <p className="text-sm text-[var(--muted)]">Give every active player without a secret one from the chosen pack. Players can still change theirs while submission is open.</p>
+              <input type="hidden" name="locale" value={locale} />
+              <input type="hidden" name="gameId" value={String(game.id)} />
+              <button className="pill pill-secondary w-fit"><Sparkles size={16} /> Fill missing secrets</button>
             </form>
 
             <form action={uploadGameBackground} className="bubble-card grid gap-3 p-6">
