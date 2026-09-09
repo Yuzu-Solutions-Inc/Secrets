@@ -29,6 +29,29 @@
     "checkEmail": "Consultez votre courriel pour continuer.",
     "invalid": "Nous n’avons pas pu terminer cette demande."
   },
+  "invite": {
+    "title": "Vous êtes invité!",
+    "join": "Rejoindre la partie",
+    "joining": "Ajout en cours…",
+    "joinWith": "Rejoignez {game} avec {org}.",
+    "invalidTitle": "Cette invitation est invalide ou expirée.",
+    "invalidBody": "Demandez un nouveau lien à votre animateur.",
+    "wrongAccountTitle": "Mauvais compte",
+    "wrongAccountBody": "Cette invitation a été envoyée à {invited}, mais vous êtes connecté en tant que {current}. Déconnectez-vous et reconnectez-vous avec {invited}.",
+    "signOut": "Se déconnecter",
+    "errors": {
+      "unauthorized": "Votre session a expiré. Reconnectez-vous pour accepter cette invitation.",
+      "invalid_invitation": "Cette invitation est invalide, expirée ou déjà utilisée.",
+      "email_mismatch": "Cette invitation a été envoyée à une adresse courriel différente de celle avec laquelle vous êtes connecté.",
+      "late_join_closed": "Cette partie a déjà commencé et n’accepte plus de nouveaux joueurs.",
+      "unknown": "Une erreur est survenue lors de l’ajout. Veuillez réessayer."
+    }
+  },
+  "errorPage": {
+    "title": "Cette page n’a pas pu se charger",
+    "body": "Un problème est survenu de notre côté. Réessayez dans un instant.",
+    "retry": "Réessayer"
+  },
   "games": {
     "title": "Vos parties",
     "new": "Nouvelle partie",

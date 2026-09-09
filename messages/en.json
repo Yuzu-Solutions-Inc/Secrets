@@ -29,6 +29,29 @@
     "checkEmail": "Check your email to continue.",
     "invalid": "We could not complete that request."
   },
+  "invite": {
+    "title": "You’re invited!",
+    "join": "Join the game",
+    "joining": "Joining…",
+    "joinWith": "Join {game} with {org}.",
+    "invalidTitle": "This invitation is invalid or expired.",
+    "invalidBody": "Ask your host for a fresh link.",
+    "wrongAccountTitle": "Wrong account",
+    "wrongAccountBody": "This invite was sent to {invited}, but you’re signed in as {current}. Sign out and sign back in with {invited}.",
+    "signOut": "Sign out",
+    "errors": {
+      "unauthorized": "Your session expired. Sign in again to accept this invitation.",
+      "invalid_invitation": "This invitation is invalid, expired, or has already been used.",
+      "email_mismatch": "This invitation was sent to a different email address than the one you’re signed in with.",
+      "late_join_closed": "This game has already started and isn’t accepting new players.",
+      "unknown": "Something went wrong while joining. Please try again."
+    }
+  },
+  "errorPage": {
+    "title": "This page couldn’t load",
+    "body": "Something went wrong on our side. Try again in a moment.",
+    "retry": "Try again"
+  },
   "games": {
     "title": "Your games",
     "new": "New game",
