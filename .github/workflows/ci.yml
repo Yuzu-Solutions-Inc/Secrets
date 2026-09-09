@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Placeholder values: the build and the non-authenticated e2e specs only need
+# these to be well-formed. Real secrets are never required in CI.
+env:
+  NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
+  SUPABASE_SECRET_KEY: sb_secret_placeholder
+  NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+
+jobs:
+  verify:
+    name: typecheck · unit · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  db-tests:
+    name: pgTAP RLS (supabase local)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Start local Postgres with migrations + seed
+        run: supabase db start
+      - name: Run database tests
+        run: supabase test db
+
+  e2e:
+    name: playwright (no-auth flows)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
