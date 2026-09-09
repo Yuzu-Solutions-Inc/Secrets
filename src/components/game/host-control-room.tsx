@@ -5,13 +5,11 @@ import {
   Check,
   CirclePlay,
   Eye,
-  Gamepad2,
   Lightbulb,
   ListChecks,
   Megaphone,
   MonitorUp,
   Pause,
-  Shield,
   SlidersHorizontal,
   Sparkles,
   Users,
@@ -24,6 +22,7 @@ import { useTranslations } from "next-intl";
 
 import { adjudicateBuzz, hostTransition, stageAccusationBuzz } from "@/app/actions/game";
 import {
+  publishDilemma,
   addHint,
   editHint,
   editSecret,
@@ -54,6 +53,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
 import { secretCategories } from "@/lib/game/templates";
+import { powerSeeds } from "@/lib/game/seeds";
 import { InvitePlayerForm } from "./invite-player-form";
 
 type Row = Record<string, unknown>;
@@ -70,6 +70,7 @@ export function HostControlRoom({
   houseSecret,
   teams,
   ledger,
+  dilemmaResponses = [],
 }: {
   locale: string;
   game: Row;
@@ -82,6 +83,7 @@ export function HostControlRoom({
   houseSecret: Row | null;
   teams: Row[];
   ledger: Row[];
+  dilemmaResponses?: { game_event_id: string; choice: string }[];
 }) {
   const t = useTranslations("host");
   const router = useRouter();
@@ -91,6 +93,7 @@ export function HostControlRoom({
   const [secretFilter, setSecretFilter] = useState("all");
   const [openSecrets, setOpenSecrets] = useState<Set<string>>(new Set());
   const [openRound, setOpenRound] = useState<string | null>(null);
+  const [broadcastType, setBroadcastType] = useState("announcement");
 
   // Once the game has started, the invite panel is replaced by the host's
   // money-correction tools (item 11).
@@ -133,7 +136,7 @@ export function HostControlRoom({
     ["secrets", t("secrets"), Eye],
     ["buzzes", t("buzzes"), Megaphone],
     ["missions", t("missions"), Sparkles],
-    ["events", t("events"), Shield],
+    ["broadcast", t("broadcast"), Megaphone],
     ["votes", t("votes"), Vote],
     ["settings", t("settings"), SlidersHorizontal],
   ] as const;
@@ -858,43 +861,112 @@ export function HostControlRoom({
           </div>
         ) : null}
 
-        {tab === "events" ? (
+        {tab === "broadcast" ? (
           <div className="space-y-3">
-            <form action={publishEvent} className="bubble-card grid gap-3 p-5 sm:grid-cols-[10rem_1fr_auto]">
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="gameId" value={String(game.id)} />
-              <select className="field" name="kind">
-                {["announcement", "dilemma", "power", "surprise", "clue"].map((kind) => <option key={kind}>{kind}</option>)}
-              </select>
-              <div className="grid gap-2">
-                <input className="field" name="title" placeholder="Big announcement" required />
-                <textarea className="field" name="body" placeholder="What everyone should see…" />
+            <div className="bubble-card p-5">
+              <div className="flex flex-wrap gap-2">
+                {["announcement", "clue", "dilemma", "power"].map((ty) => (
+                  <button key={ty} type="button" onClick={() => setBroadcastType(ty)} className={`pill capitalize ${broadcastType === ty ? "pill-primary" : "pill-secondary"}`}>{ty}</button>
+                ))}
               </div>
-              <button className="pill pill-primary">Publish</button>
-            </form>
-            <form action={assignPower} className="bubble-card grid gap-3 p-5 sm:grid-cols-[1fr_1fr_auto]">
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="gameId" value={String(game.id)} />
-              <select className="field" name="playerId" required defaultValue="">
-                <option value="" disabled>Give power to…</option>
-                {players.map((player) => {
-                  const profile = player.profiles as Row | null;
-                  return <option key={String(player.id)} value={String(player.id)}>{String(profile?.display_name ?? "Player")}</option>;
-                })}
-              </select>
-              <select className="field" name="kind">
-                <option value="immunity">Immunity</option><option value="double_vote">Double vote</option><option value="free_hint">Free hint</option><option value="buzz_shield">Buzz shield</option>
-              </select>
-              <button className="pill pill-secondary">Assign power</button>
-            </form>
-            {events.map((event) => (
-              <article key={String(event.id)} className="bubble-card p-5">
-                <Shield className="text-violet-600" />
-                <h2 className="display mt-3 text-2xl font-black">{String(event.title)}</h2>
-                <p className="text-sm text-[var(--muted)]">{String(event.body ?? "")}</p>
-              </article>
-            ))}
-            {!events.length ? <Empty icon={Gamepad2} text="Trigger a dilemma, power, surprise mission or announcement." /> : null}
+
+              {broadcastType === "announcement" || broadcastType === "clue" ? (
+                <form action={publishEvent} className="mt-4 grid gap-2">
+                  <input type="hidden" name="locale" value={locale} />
+                  <input type="hidden" name="gameId" value={String(game.id)} />
+                  <input type="hidden" name="kind" value={broadcastType} />
+                  <p className="text-sm text-[var(--muted)]">
+                    {broadcastType === "clue"
+                      ? "A clue — its own dashboard sound and animation. Always public, always for everyone."
+                      : "One line for the whole room, full-screen on the dashboard with sound. Always public."}
+                  </p>
+                  <input className="field" name="title" placeholder={broadcastType === "clue" ? "The clue…" : "The announcement…"} required />
+                  <button className="pill pill-primary w-fit"><Megaphone size={16} /> Broadcast</button>
+                </form>
+              ) : null}
+
+              {broadcastType === "dilemma" ? (
+                <form action={publishDilemma} className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <input type="hidden" name="locale" value={locale} />
+                  <input type="hidden" name="gameId" value={String(game.id)} />
+                  <input className="field sm:col-span-2" name="prompt" placeholder="The dilemma the players face…" required />
+                  <input className="field" name="option1" placeholder="Option 1" required />
+                  <input className="field" name="option2" placeholder="Option 2" required />
+                  <select className="field" name="scope" defaultValue="all">
+                    <option value="all">Everyone</option><option value="team">A team</option><option value="player">One player</option>
+                  </select>
+                  <label className="flex items-center gap-2 font-bold"><input type="checkbox" name="isPublic" /> Show on dashboard</label>
+                  <select className="field" name="teamId" defaultValue="">
+                    <option value="">— team (only if scoped to a team) —</option>
+                    {teams.map((team) => <option key={String(team.id)} value={String(team.id)}>{String(team.name)}</option>)}
+                  </select>
+                  <select className="field" name="playerId" defaultValue="">
+                    <option value="">— player (only if scoped to one) —</option>
+                    {players.map((player) => {
+                      const p = player.profiles as Row | null;
+                      return <option key={String(player.id)} value={String(player.id)}>{String(p?.display_name ?? "Player")}</option>;
+                    })}
+                  </select>
+                  <button className="pill pill-primary w-fit sm:col-span-2">Send dilemma</button>
+                </form>
+              ) : null}
+
+              {broadcastType === "power" ? (
+                <form action={assignPower} className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <input type="hidden" name="locale" value={locale} />
+                  <input type="hidden" name="gameId" value={String(game.id)} />
+                  <select className="field" name="scope" defaultValue="player">
+                    <option value="player">One player</option><option value="team">A team</option><option value="all">Everyone</option>
+                  </select>
+                  <select className="field" name="kind" defaultValue="immunity">
+                    {powerSeeds.map((power) => <option key={power.key} value={power.key}>{power.title[locale === "fr" ? "fr" : "en"]}</option>)}
+                    <option value="other">Other…</option>
+                  </select>
+                  <select className="field" name="playerId" defaultValue="">
+                    <option value="">— player (if scoped to one) —</option>
+                    {players.map((player) => {
+                      const p = player.profiles as Row | null;
+                      return <option key={String(player.id)} value={String(player.id)}>{String(p?.display_name ?? "Player")}</option>;
+                    })}
+                  </select>
+                  <select className="field" name="teamId" defaultValue="">
+                    <option value="">— team (if scoped to a team) —</option>
+                    {teams.map((team) => <option key={String(team.id)} value={String(team.id)}>{String(team.name)}</option>)}
+                  </select>
+                  <input className="field sm:col-span-2" name="kindOther" placeholder="Custom power name (used when kind is Other)" />
+                  <label className="flex items-center gap-2 font-bold"><input type="checkbox" name="isPublic" defaultChecked /> Announce on the dashboard</label>
+                  <button className="pill pill-primary w-fit sm:col-span-2">Grant power</button>
+                </form>
+              ) : null}
+            </div>
+
+            {events.map((event) => {
+              const isDilemma = String(event.kind) === "dilemma";
+              const payload = (event.payload ?? {}) as Row;
+              const answers = isDilemma ? dilemmaResponses.filter((r) => r.game_event_id === event.id) : [];
+              const c1 = answers.filter((a) => a.choice === "option_1").length;
+              const c2 = answers.filter((a) => a.choice === "option_2").length;
+              return (
+                <article key={String(event.id)} className="bubble-card p-5">
+                  <p className="text-xs font-black uppercase tracking-widest text-pink-600">{String(event.kind)}{event.is_public ? "" : " · private"}</p>
+                  <h2 className="display mt-1 text-xl font-black">{String(event.title)}</h2>
+                  {event.body ? <p className="mt-1 text-sm text-[var(--muted)]">{String(event.body)}</p> : null}
+                  {isDilemma ? (
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-xl bg-pink-50 p-3">
+                        <p className="text-sm font-bold">{String(payload.option_1 ?? "Option 1")}</p>
+                        <p className="display text-2xl font-black text-pink-700">{c1}</p>
+                      </div>
+                      <div className="rounded-xl bg-pink-50 p-3">
+                        <p className="text-sm font-bold">{String(payload.option_2 ?? "Option 2")}</p>
+                        <p className="display text-2xl font-black text-pink-700">{c2}</p>
+                      </div>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+            {!events.length ? <Empty icon={Megaphone} text="Broadcast an announcement, clue, dilemma or power." /> : null}
           </div>
         ) : null}
 

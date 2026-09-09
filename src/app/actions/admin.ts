@@ -352,11 +352,16 @@ export async function addSecretHolder(formData: FormData) {
   refresh(parsed.locale, parsed.gameId);
 }
 
+// The Broadcast section (items 12-18). One entry point, four shapes.
+// "surprise" is gone — it was "announcement" with another label.
+
+// Announcement + Clue: a single public line for the whole room. They differ
+// only in the dashboard sound/animation, keyed off `kind`.
 export async function publishEvent(formData: FormData) {
   const parsed = base.extend({
-    title: z.string().trim().min(2).max(100),
+    title: z.string().trim().min(2).max(200),
     body: z.string().trim().max(1000).optional(),
-    kind: z.enum(["announcement", "dilemma", "power", "surprise", "clue"]),
+    kind: z.enum(["announcement", "clue"]),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
   const { error } = await supabase.from("game_events").insert({
@@ -371,18 +376,79 @@ export async function publishEvent(formData: FormData) {
   refresh(parsed.locale, parsed.gameId);
 }
 
-export async function assignPower(formData: FormData) {
+// Dilemma: two options the audience picks between on their phone. The host
+// later reads the answers stacked per dilemma (game_event_responses).
+export async function publishDilemma(formData: FormData) {
   const parsed = base.extend({
-    playerId: z.string().uuid(),
-    kind: z.enum(["immunity", "double_vote", "free_hint", "buzz_shield"]),
+    prompt: z.string().trim().min(2).max(200),
+    option1: z.string().trim().min(1).max(120),
+    option2: z.string().trim().min(1).max(120),
+    scope: z.enum(["all", "team", "player"]),
+    isPublic: z.coerce.boolean(),
+    teamId: z.string().uuid().optional().or(z.literal("")),
+    playerId: z.string().uuid().optional().or(z.literal("")),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
-  const { error } = await supabase.from("player_powers").insert({
-    player_id: parsed.playerId,
-    kind: parsed.kind,
-    config: {},
+  const { error } = await supabase.from("game_events").insert({
+    game_id: parsed.gameId,
+    kind: "dilemma",
+    title: parsed.prompt,
+    is_public: parsed.isPublic,
+    published_at: new Date().toISOString(),
+    payload: {
+      option_1: parsed.option1,
+      option_2: parsed.option2,
+      scope: parsed.scope,
+      team_id: parsed.scope === "team" ? parsed.teamId || null : null,
+      player_id: parsed.scope === "player" ? parsed.playerId || null : null,
+    },
   });
   if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+// Power: granted to a player, a whole team, or everyone. `kind` is a seed key
+// or free text ("other" — the host can invent one). Optionally announced on
+// the dashboard.
+export async function assignPower(formData: FormData) {
+  const parsed = base.extend({
+    scope: z.enum(["player", "team", "all"]),
+    playerId: z.string().uuid().optional().or(z.literal("")),
+    teamId: z.string().uuid().optional().or(z.literal("")),
+    kind: z.string().trim().min(1).max(60),
+    kindOther: z.string().trim().max(60).optional().default(""),
+    isPublic: z.coerce.boolean(),
+  }).parse(Object.fromEntries(formData));
+  const kind = parsed.kind === "other" && parsed.kindOther ? parsed.kindOther : parsed.kind;
+  const supabase = await createClient();
+
+  let targetPlayerIds: string[] = [];
+  if (parsed.scope === "player" && parsed.playerId) {
+    targetPlayerIds = [parsed.playerId];
+  } else if (parsed.scope === "team" && parsed.teamId) {
+    const { data: members } = await supabase.from("team_members").select("player_id").eq("team_id", parsed.teamId);
+    targetPlayerIds = (members ?? []).map((m) => m.player_id as string);
+  } else if (parsed.scope === "all") {
+    const { data: active } = await supabase.from("game_players").select("id").eq("game_id", parsed.gameId).eq("play_status", "active");
+    targetPlayerIds = (active ?? []).map((p) => p.id as string);
+  }
+  if (!targetPlayerIds.length) throw new Error("no_power_target");
+
+  const { error } = await supabase.from("player_powers").insert(
+    targetPlayerIds.map((playerId) => ({ player_id: playerId, kind, config: {} })),
+  );
+  if (error) throw new Error(error.message);
+
+  if (parsed.isPublic) {
+    await supabase.from("game_events").insert({
+      game_id: parsed.gameId,
+      kind: "power",
+      title: `Power granted: ${kind.replaceAll("_", " ")}`,
+      is_public: true,
+      published_at: new Date().toISOString(),
+      payload: { scope: parsed.scope, kind },
+    });
+  }
   refresh(parsed.locale, parsed.gameId);
 }
 
