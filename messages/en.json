@@ -96,7 +96,8 @@
     "settings": "Settings",
     "display": "Open TV dashboard",
     "lock": "Lock secrets",
-    "nextRound": "Start next round"
+    "nextRound": "Start next round",
+    "currentRound": "Current round"
   },
   "display": {
     "round": "Live round",

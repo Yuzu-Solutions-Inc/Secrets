@@ -96,7 +96,8 @@
     "settings": "Réglages",
     "display": "Ouvrir l’écran TV",
     "lock": "Verrouiller les secrets",
-    "nextRound": "Lancer la prochaine manche"
+    "nextRound": "Lancer la prochaine manche",
+    "currentRound": "Manche en cours"
   },
   "display": {
     "round": "Manche en direct",
