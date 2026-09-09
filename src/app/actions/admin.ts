@@ -14,7 +14,11 @@ const base = z.object({
 });
 
 function refresh(locale: string, gameId: string) {
+  // Actions here are invoked from the host control room, but that route
+  // (`/host`) was never being revalidated — only the player-facing route —
+  // so the host's own page stayed stale after every action they took.
   revalidatePath(`/${locale}/games/${gameId}`, "layout");
+  revalidatePath(`/${locale}/games/${gameId}/host`, "page");
 }
 
 export async function addRound(formData: FormData) {
