@@ -187,8 +187,9 @@ export async function createMission(formData: FormData) {
     playerId: z.string().uuid().optional().or(z.literal("")),
     teamId: z.string().uuid().optional().or(z.literal("")),
     assignAll: z.coerce.boolean().optional(),
-    // Optional countdown, in minutes from now. Missions still close only when
-    // the host says so (item 9); the deadline is a visual timer.
+    // Optional countdown in minutes. Stored now, applied when the host presses
+    // Start (start_mission sets deadline = now + timer_minutes). Missions still
+    // close only when the host says so (item 9).
     timerMinutes: z.coerce.number().int().min(0).max(1440).optional().default(0),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
@@ -202,7 +203,7 @@ export async function createMission(formData: FormData) {
     penalty: parsed.penalty * 100,
     visibility: parsed.visibility,
     status: "draft",
-    deadline: parsed.timerMinutes > 0 ? new Date(Date.now() + parsed.timerMinutes * 60_000).toISOString() : null,
+    timer_minutes: parsed.timerMinutes,
   }).select("id").single();
   if (error) throw new Error(error.message);
 

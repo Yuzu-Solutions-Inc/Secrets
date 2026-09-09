@@ -908,7 +908,9 @@ export function HostControlRoom({
                         {left <= 0 ? "Timer expired" : `Timer: ${String(Math.floor(left / 60)).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`}
                       </p>
                     );
-                  })() : null}
+                  })() : Number(mission.timer_minutes) > 0 && isDraft ? (
+                    <p className="mt-2 text-xs font-black text-[var(--muted)]">Timer: {Number(mission.timer_minutes)} min — starts on Start</p>
+                  ) : null}
                   <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 font-black">
                     <span className="text-emerald-600">Reward +{formatMoney(Number(mission.reward), String(game.currency_symbol))}</span>
                     {penalty > 0 ? (

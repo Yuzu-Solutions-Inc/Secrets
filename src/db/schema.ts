@@ -359,6 +359,9 @@ export const missions = pgTable("missions", {
   reward: bigint("reward", { mode: "number" }).notNull().default(0),
   penalty: bigint("penalty", { mode: "number" }).notNull().default(0),
   status: missionStatus("status").notNull().default("draft"),
+  // Countdown length chosen at creation; deadline is stamped from it when the
+  // host starts the mission.
+  timerMinutes: integer("timer_minutes").notNull().default(0),
   deadline: timestamp("deadline", { withTimezone: true }),
   // Set when the host starts a prepared draft mission. Null while it is still
   // hidden from players.
