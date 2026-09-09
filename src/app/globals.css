@@ -17,6 +17,12 @@
 }
 
 * { box-sizing: border-box; }
+
+/* This is a single light theme. Lock the color-scheme so browsers in OS dark
+   mode don't dark-ify native controls (select popups, <option> lists, number
+   spinners, scrollbars, form chrome) against the light bubble-card design. */
+:root { color-scheme: light; }
+
 html { min-height: 100%; background: var(--cream); overflow-x: clip; }
 body {
   min-height: 100dvh;
@@ -29,7 +35,9 @@ body {
   font-family: Inter, ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
 }
 
-button, input, textarea, select { font: inherit; }
+button, input, textarea, select { font: inherit; color: var(--ink); }
+::placeholder { color: var(--muted); opacity: 1; }
+::selection { background: rgba(235, 47, 150, .22); }
 button, a { -webkit-tap-highlight-color: transparent; }
 
 .display {

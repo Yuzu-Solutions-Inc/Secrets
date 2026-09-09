@@ -67,6 +67,7 @@
   "play": {
     "wallet": "Ma cagnotte",
     "mission": "Mission en cours",
+    "newMission": "Nouvelle mission de l’hôte — touchez pour voir",
     "hints": "Mes indices",
     "notes": "Carnet de théories",
     "team": "Mon équipe",

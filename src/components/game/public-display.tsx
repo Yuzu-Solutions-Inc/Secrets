@@ -60,7 +60,7 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
   const mountedRef = useRef(false);
 
   const game = data.game;
-  const players = data.players ?? [];
+  const players = useMemo(() => data.players ?? [], [data.players]);
   const round = data.round;
   const latestEvent = data.latest_event;
   const accusation = data.accusation;
@@ -254,7 +254,81 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
         ? "from-amber-400/95 via-orange-500/95 to-amber-600/95"
         : "from-rose-600/95 via-rose-800/95 to-slate-900/95";
 
-  const cols = players.length <= 4 ? 2 : players.length <= 9 ? 3 : players.length <= 16 ? 4 : 5;
+  // ---- balances board: paginate + auto-rotate when players overflow ----
+  // A stable signature of only the fields the cards render. The 1s clock tick
+  // and no-op refetches (poll every 3s) still re-render the shell, but this
+  // keeps `boardPlayers` referentially stable so the card grid is not rebuilt
+  // and the page-turn animation is not restarted unless something changed.
+  const playersSig = useMemo(
+    () =>
+      players
+        .map((p) => `${String(p.id)}:${String(p.display_name ?? "")}:${Number(p.balance ?? 0)}:${p.secret_revealed ? 1 : 0}`)
+        .sort()
+        .join("|"),
+    [players],
+  );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const boardPlayers = useMemo(() => players, [playersSig]);
+
+  // Up to 9 cards fit legibly on the board; beyond that, split into balanced
+  // pages that auto-advance every 5s.
+  const MAX_PER_PAGE = 9;
+  const pageCount = Math.max(1, Math.ceil(boardPlayers.length / MAX_PER_PAGE));
+  const perPage = Math.ceil(boardPlayers.length / pageCount) || 1;
+  const paginated = pageCount > 1;
+  const [boardPage, setBoardPage] = useState(0);
+  const safePage = boardPage % pageCount;
+
+  useEffect(() => {
+    if (pageCount <= 1) return;
+    const id = window.setInterval(() => setBoardPage((p) => (p + 1) % pageCount), 5000);
+    return () => window.clearInterval(id);
+  }, [pageCount]);
+
+  const cols = perPage <= 4 ? 2 : perPage <= 9 ? 3 : 4;
+
+  const pagePlayers = paginated
+    ? boardPlayers.slice(safePage * perPage, safePage * perPage + perPage)
+    : boardPlayers;
+
+  const cardGrid = useMemo(
+    () => (
+      <div
+        key={safePage}
+        className="secrets-cards-page grid h-full min-h-0 gap-[14px] overflow-hidden"
+        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: "minmax(0, 1fr)" }}
+      >
+        {pagePlayers.map((player) => {
+          const revealed = Boolean(player.secret_revealed);
+          return (
+            <div
+              key={String(player.id)}
+              className={`flex flex-col justify-center rounded-[18px] px-[18px] py-[14px] ${revealed ? "bg-violet-100 ring-2 ring-violet-500" : "bg-pink-50"}`}
+            >
+              <div className="flex items-center gap-[12px]">
+                <span
+                  className={`grid size-[42px] shrink-0 place-items-center rounded-full text-[18px] font-black text-white ${revealed ? "bg-gradient-to-br from-violet-500 to-fuchsia-700" : "bg-gradient-to-br from-pink-400 to-violet-600"}`}
+                >
+                  {String(player.display_name ?? "?").slice(0, 1)}
+                </span>
+                <p className="truncate text-[21px] font-black">{String(player.display_name ?? "Player")}</p>
+              </div>
+              <p className={`display mt-[8px] text-[29px] font-black leading-none ${revealed ? "text-violet-800" : "text-pink-700"}`}>
+                {formatMoney(Number(player.balance ?? 0), String(game.currency_symbol))}
+              </p>
+              {revealed ? (
+                <p className="secrets-reveal-badge mt-[8px] inline-flex w-fit items-center gap-[6px] rounded-full bg-violet-600 px-[10px] py-[3px] text-[12px] font-black uppercase tracking-widest text-white">
+                  <Unlock size={12} /> {t("secretOut")}
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [playersSig, safePage, cols],
+  );
 
   return (
     <div
@@ -270,6 +344,8 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
         @keyframes secretsShake { 0%,100% { transform: translateX(0) } 20% { transform: translateX(-12px) } 40% { transform: translateX(10px) } 60% { transform: translateX(-7px) } 80% { transform: translateX(4px) } }
         @keyframes secretsConfetti { 0% { transform: translate3d(0,-12vh,0) rotate(0); opacity: 1 } 100% { transform: translate3d(var(--dx,0), 112vh, 0) rotate(720deg); opacity: .9 } }
         @keyframes secretsRevealPop { 0% { transform: scale(.5); opacity: 0 } 70% { transform: scale(1.12) } 100% { transform: scale(1); opacity: 1 } }
+        @keyframes secretsPageIn { 0% { opacity: 0; transform: translateY(20px) } 100% { opacity: 1; transform: translateY(0) } }
+        .secrets-cards-page { animation: secretsPageIn .7s cubic-bezier(.2,1,.3,1) both }
         .secrets-alarm { animation: secretsAlarmFlash 2.6s ease-out forwards }
         .secrets-alarm-word { animation: secretsAlarmSlam .7s cubic-bezier(.2,1.4,.3,1) forwards }
         .secrets-spot { animation: secretsSpotIn .45s cubic-bezier(.2,1,.3,1) both }
@@ -431,38 +507,24 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
             </aside>
 
             <article className="flex min-h-0 flex-col rounded-[28px] bg-white p-[28px] text-[#1f1024]">
-              <p className="text-[18px] font-black uppercase tracking-[.2em] text-pink-700">{t("balances")}</p>
-              <div
-                className="mt-[16px] grid min-h-0 flex-1 gap-[14px] overflow-hidden"
-                style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: "minmax(0, 1fr)" }}
-              >
-                {players.map((player) => {
-                  const revealed = Boolean(player.secret_revealed);
-                  return (
-                    <div
-                      key={String(player.id)}
-                      className={`flex flex-col justify-center rounded-[18px] px-[18px] py-[14px] ${revealed ? "bg-violet-100 ring-2 ring-violet-500" : "bg-pink-50"}`}
-                    >
-                      <div className="flex items-center gap-[12px]">
-                        <span
-                          className={`grid size-[42px] shrink-0 place-items-center rounded-full text-[18px] font-black text-white ${revealed ? "bg-gradient-to-br from-violet-500 to-fuchsia-700" : "bg-gradient-to-br from-pink-400 to-violet-600"}`}
-                        >
-                          {String(player.display_name ?? "?").slice(0, 1)}
-                        </span>
-                        <p className="truncate text-[21px] font-black">{String(player.display_name ?? "Player")}</p>
-                      </div>
-                      <p className={`display mt-[8px] text-[29px] font-black leading-none ${revealed ? "text-violet-800" : "text-pink-700"}`}>
-                        {formatMoney(Number(player.balance ?? 0), String(game.currency_symbol))}
-                      </p>
-                      {revealed ? (
-                        <p className="secrets-reveal-badge mt-[8px] inline-flex w-fit items-center gap-[6px] rounded-full bg-violet-600 px-[10px] py-[3px] text-[12px] font-black uppercase tracking-widest text-white">
-                          <Unlock size={12} /> {t("secretOut")}
-                        </p>
-                      ) : null}
-                    </div>
-                  );
-                })}
+              <div className="flex items-baseline justify-between gap-[16px]">
+                <p className="text-[18px] font-black uppercase tracking-[.2em] text-pink-700">{t("balances")}</p>
+                {paginated ? (
+                  <p className="text-[15px] font-black tabular-nums text-pink-400">{safePage + 1}/{pageCount}</p>
+                ) : null}
               </div>
+              <div className="relative mt-[16px] min-h-0 flex-1">{cardGrid}</div>
+              {paginated ? (
+                <div className="mt-[14px] flex items-center justify-center gap-[8px]">
+                  {Array.from({ length: pageCount }).map((_, i) => (
+                    <span
+                      key={i}
+                      className="h-[8px] rounded-full transition-all duration-500 ease-out"
+                      style={{ width: i === safePage ? 30 : 8, background: i === safePage ? "#db2777" : "#f9d3e6" }}
+                    />
+                  ))}
+                </div>
+              ) : null}
             </article>
           </div>
         </div>

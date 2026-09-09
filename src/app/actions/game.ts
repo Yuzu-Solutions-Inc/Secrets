@@ -459,6 +459,24 @@ export async function submitMission(formData: FormData) {
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
 }
 
+// Player acknowledges a freshly started mission. Fire-and-forget from the
+// dashboard so the "new mission" indicator does not come back on other devices.
+export async function markMissionSeen(formData: FormData) {
+  const parsed = z.object({
+    gameId: z.string().uuid(),
+    missionId: z.string().uuid(),
+    playerId: z.string().uuid(),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("mark_mission_seen", {
+    p_mission_id: parsed.missionId,
+    p_player_id: parsed.playerId,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+}
+
 export async function submitHouseTheory(formData: FormData) {
   const parsed = z.object({
     gameId: z.string().uuid(),

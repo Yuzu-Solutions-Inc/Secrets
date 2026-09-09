@@ -120,6 +120,8 @@ export async function createMission(formData: FormData) {
     teamId: z.string().uuid().optional().or(z.literal("")),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
+  // Missions are always created as a hidden draft — including pre-assigned
+  // ones. The host reveals them to players later with `startMission`.
   const { data: mission, error } = await supabase.from("missions").insert({
     game_id: parsed.gameId,
     title: parsed.title,
@@ -127,7 +129,7 @@ export async function createMission(formData: FormData) {
     reward: parsed.reward * 100,
     penalty: parsed.penalty * 100,
     visibility: parsed.visibility,
-    status: parsed.playerId || parsed.teamId ? "offered" : "draft",
+    status: "draft",
   }).select("id").single();
   if (error) throw new Error(error.message);
   if (parsed.playerId || parsed.teamId) {
@@ -138,6 +140,18 @@ export async function createMission(formData: FormData) {
     });
     if (assignmentError) throw new Error(assignmentError.message);
   }
+  refresh(parsed.locale, parsed.gameId);
+}
+
+// Host flips a prepared draft mission live: players assigned to it (or anyone,
+// if it is public) can now see it, and their phone shows a "new mission" dot.
+export async function startMission(formData: FormData) {
+  const parsed = base.extend({
+    missionId: z.string().uuid(),
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("start_mission", { p_mission_id: parsed.missionId });
+  if (error) throw new Error(error.message);
   refresh(parsed.locale, parsed.gameId);
 }
 

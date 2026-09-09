@@ -6,7 +6,6 @@ import {
   CirclePlay,
   Eye,
   Gamepad2,
-  History,
   Lightbulb,
   ListChecks,
   Megaphone,
@@ -41,8 +40,8 @@ import {
   settleTeamDilemma,
   saveWinnerFormula,
   setPlayerPlayStatus,
+  startMission,
   uploadGameBackground,
-  undoTransaction,
   validateMission,
 } from "@/app/actions/admin";
 import { createClient } from "@/lib/supabase/client";
@@ -59,7 +58,6 @@ export function HostControlRoom({
   buzzes,
   missions,
   events,
-  audit,
   secrets,
   houseSecret,
   teams,
@@ -72,7 +70,6 @@ export function HostControlRoom({
   buzzes: Row[];
   missions: Row[];
   events: Row[];
-  audit: Row[];
   secrets: Row[];
   houseSecret: Row | null;
   teams: Row[];
@@ -117,7 +114,6 @@ export function HostControlRoom({
     ["events", t("events"), Shield],
     ["house", "House Secret", Lightbulb],
     ["votes", t("votes"), Vote],
-    ["audit", "Audit", History],
   ] as const;
 
   return (
@@ -430,9 +426,12 @@ export function HostControlRoom({
             <form action={createMission} className="bubble-card grid gap-3 p-5 sm:grid-cols-2">
               <input type="hidden" name="locale" value={locale} />
               <input type="hidden" name="gameId" value={String(game.id)} />
+              <p className="text-sm text-[var(--muted)] sm:col-span-2">
+                New missions are saved as a hidden draft. Players only see one after you press <span className="font-bold">Start</span>.
+              </p>
               <input className="field" name="title" placeholder="Mission title" required />
               <select className="field" name="playerId" defaultValue="">
-                <option value="">Unassigned draft</option>
+                <option value="">No player assignment</option>
                 {players.map((player) => {
                   const profile = player.profiles as Row | null;
                   return <option key={String(player.id)} value={String(player.id)}>{String(profile?.display_name ?? "Player")}</option>;
@@ -446,19 +445,51 @@ export function HostControlRoom({
               <select className="field" name="visibility" defaultValue="private">
                 <option value="private">Private</option><option value="team">Team</option><option value="public">Public</option>
               </select>
-              <div className="grid grid-cols-2 gap-2">
-                <input className="field" name="reward" type="number" min="0" defaultValue="1000" aria-label="Reward" />
-                <input className="field" name="penalty" type="number" min="0" defaultValue="0" aria-label="Penalty" />
+              <div className="grid grid-cols-2 gap-3 sm:col-span-2">
+                <label className="grid gap-1">
+                  <span className="text-xs font-bold text-emerald-700">Reward — paid to the player when you approve</span>
+                  <input className="field" name="reward" type="number" min="0" defaultValue="1000" />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-bold text-red-700">Penalty — charged to the player if it fails</span>
+                  <input className="field" name="penalty" type="number" min="0" defaultValue="0" />
+                </label>
               </div>
-              <button className="pill pill-primary sm:col-span-2">Create mission</button>
+              <button className="pill pill-primary sm:col-span-2">Create draft mission</button>
             </form>
             <div className="grid gap-3 sm:grid-cols-2">
-              {missions.map((mission) => (
+              {missions.map((mission) => {
+                const status = String(mission.status);
+                const isDraft = status === "draft";
+                const penalty = Number(mission.penalty);
+                return (
                 <article key={String(mission.id)} className="bubble-card p-5">
-                  <Sparkles className="text-pink-600" />
+                  <div className="flex items-center justify-between gap-2">
+                    <Sparkles className="text-pink-600" />
+                    <span className={`pill text-xs ${isDraft ? "bg-[var(--muted-bg,#eee)] text-[var(--muted)]" : status === "offered" ? "bg-emerald-100 text-emerald-800" : status === "submitted" ? "bg-amber-100 text-amber-900" : status === "approved" ? "bg-emerald-600 text-white" : status === "failed" ? "bg-red-600 text-white" : "bg-[var(--muted-bg,#eee)] text-[var(--muted)]"}`}>
+                      {isDraft ? "Draft — hidden" : status === "offered" ? "Live" : status}
+                    </span>
+                  </div>
                   <h2 className="display mt-4 text-2xl font-black">{String(mission.title)}</h2>
                   <p className="mt-2 text-sm text-[var(--muted)]">{String(mission.instructions)}</p>
-                  <p className="mt-4 font-black text-pink-600">+{formatMoney(Number(mission.reward), String(game.currency_symbol))}</p>
+                  <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 font-black">
+                    <span className="text-emerald-600">Reward +{formatMoney(Number(mission.reward), String(game.currency_symbol))}</span>
+                    {penalty > 0 ? (
+                      <span className="text-red-600">Penalty −{formatMoney(penalty, String(game.currency_symbol))}</span>
+                    ) : (
+                      <span className="text-[var(--muted)]">No penalty</span>
+                    )}
+                  </div>
+                  {isDraft ? (
+                    <form action={startMission} className="mt-4">
+                      <input type="hidden" name="locale" value={locale} />
+                      <input type="hidden" name="gameId" value={String(game.id)} />
+                      <input type="hidden" name="missionId" value={String(mission.id)} />
+                      <button className="pill pill-primary inline-flex w-full items-center justify-center gap-2">
+                        <CirclePlay size={16} /> Start mission
+                      </button>
+                    </form>
+                  ) : null}
                   {((mission.mission_assignments as Row[] | undefined) ?? []).map((assignment) => {
                     const assignedPlayer = assignment.game_players as Row | null;
                     const assignedProfile = assignedPlayer?.profiles as Row | null;
@@ -483,7 +514,8 @@ export function HostControlRoom({
                     );
                   })}
                 </article>
-              ))}
+                );
+              })}
               {!missions.length ? <Empty icon={Sparkles} text="Create a secret, team or public mission." /> : null}
             </div>
           </div>
@@ -511,20 +543,30 @@ export function HostControlRoom({
               <button className="pill pill-primary">Apply</button>
             </form>
             <div className="bubble-card divide-y divide-pink-100 overflow-hidden">
-              {ledger.map((transaction) => (
-                <details key={String(transaction.id)} className="p-4">
-                  <summary className="cursor-pointer font-bold">{String(transaction.type)} · {String(transaction.description ?? "")}</summary>
-                  {transaction.reversed_transaction_id ? <p className="mt-2 text-sm text-[var(--muted)]">This is a reversal.</p> : (
-                    <form action={undoTransaction} className="mt-3 flex gap-2">
-                      <input type="hidden" name="locale" value={locale} />
-                      <input type="hidden" name="gameId" value={String(game.id)} />
-                      <input type="hidden" name="transactionId" value={String(transaction.id)} />
-                      <input className="field min-w-0" name="reason" placeholder="Why undo this?" required />
-                      <button className="pill pill-secondary shrink-0">Undo</button>
-                    </form>
-                  )}
-                </details>
-              ))}
+              {ledger.map((transaction) => {
+                const entries = (transaction.ledger_entries as Row[] | null) ?? [];
+                const source = entries.find((entry) => Number(entry.amount) < 0);
+                const dest = entries.find((entry) => Number(entry.amount) > 0);
+                const amount = Math.abs(Number(source?.amount ?? dest?.amount ?? 0));
+                const destWallet = dest?.wallets as Row | null;
+                const showRecipient = Boolean(destWallet) && String(destWallet?.kind) !== "house";
+                return (
+                  <div key={String(transaction.id)} className="flex items-center justify-between gap-4 p-4">
+                    <div className="min-w-0">
+                      <p className="truncate font-bold">
+                        {walletLabel(source?.wallets as Row | null)}
+                        {showRecipient ? <span className="text-[var(--muted)]"> → {walletLabel(destWallet)}</span> : null}
+                      </p>
+                      <p className="text-xs text-[var(--muted)]">
+                        {String(transaction.type).replaceAll("_", " ")}
+                        {transaction.reversed_transaction_id ? " · reversal" : ""}
+                      </p>
+                    </div>
+                    <p className="display shrink-0 font-black">{formatMoney(amount, String(game.currency_symbol))}</p>
+                  </div>
+                );
+              })}
+              {!ledger.length ? <p className="p-5 text-[var(--muted)]">No transactions yet.</p> : null}
             </div>
           </div>
         ) : null}
@@ -623,20 +665,19 @@ export function HostControlRoom({
           </div>
         ) : null}
 
-        {tab === "audit" ? (
-          <div className="bubble-card divide-y divide-pink-100 overflow-hidden">
-            {audit.map((entry) => (
-              <div key={String(entry.id)} className="p-4">
-                <p className="font-bold">{String(entry.action)}</p>
-                <p className="text-xs text-[var(--muted)]">{new Date(String(entry.created_at)).toLocaleString(locale)}</p>
-              </div>
-            ))}
-            {!audit.length ? <p className="p-5 text-[var(--muted)]">Host actions and corrections will be recorded here.</p> : null}
-          </div>
-        ) : null}
       </div>
     </section>
   );
+}
+
+function walletLabel(wallet: Row | null | undefined) {
+  if (!wallet) return "—";
+  if (String(wallet.kind) === "house") return "House";
+  const profile = (wallet.game_players as Row | null)?.profiles as Row | null;
+  if (profile?.display_name) return String(profile.display_name);
+  const team = wallet.teams as Row | null;
+  if (team?.name) return `${String(team.name)} (team)`;
+  return "Unknown";
 }
 
 function Empty({ icon: Icon, text }: { icon: typeof Lightbulb; text: string }) {

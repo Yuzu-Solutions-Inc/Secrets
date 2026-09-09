@@ -67,6 +67,7 @@
   "play": {
     "wallet": "My wallet",
     "mission": "Current mission",
+    "newMission": "New mission from the host — tap to view",
     "hints": "My hints",
     "notes": "Theory notebook",
     "team": "My team",
