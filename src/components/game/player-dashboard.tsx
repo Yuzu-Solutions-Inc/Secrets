@@ -74,6 +74,10 @@ export function PlayerDashboard(props: Props) {
   const targets = useMemo(() => props.players.filter((player) => player.id !== props.playerId), [props.players, props.playerId]);
 
   useEffect(() => {
+    // Close the secret modal once the server action reports success. This is the
+    // supported way to react to a useActionState result; it runs once per
+    // successful submission, not on every render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (secretState.success) setModal(null);
   }, [secretState]);
 
