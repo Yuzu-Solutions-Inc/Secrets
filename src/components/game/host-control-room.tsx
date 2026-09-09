@@ -25,8 +25,8 @@ import { useTranslations } from "next-intl";
 import { adjudicateBuzz, hostTransition, stageAccusationBuzz } from "@/app/actions/game";
 import {
   addHint,
-  addImageHint,
   editHint,
+  editSecret,
   deleteHint,
   addHouseClue,
   addSecretHolder,
@@ -85,6 +85,9 @@ export function HostControlRoom({
   const router = useRouter();
   const [tab, setTab] = useState("players");
   const [openLedgerPlayer, setOpenLedgerPlayer] = useState<string | null>(null);
+  const [secretQuery, setSecretQuery] = useState("");
+  const [secretFilter, setSecretFilter] = useState("all");
+  const [openSecrets, setOpenSecrets] = useState<Set<string>>(new Set());
 
   // Once the game has started, the invite panel is replaced by the host's
   // money-correction tools (item 11).
@@ -128,7 +131,6 @@ export function HostControlRoom({
     ["buzzes", t("buzzes"), Megaphone],
     ["missions", t("missions"), Sparkles],
     ["events", t("events"), Shield],
-    ["house", "House Secret", Lightbulb],
     ["votes", t("votes"), Vote],
     ["settings", t("settings"), SlidersHorizontal],
   ] as const;
@@ -409,101 +411,213 @@ export function HostControlRoom({
           </div>
         ) : null}
 
-        {tab === "secrets" ? (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {secrets.map((secret) => {
-              const holders = secret.secret_holders as Row[] | null;
-              const holder = holders?.[0]?.game_players as Row | null;
-              const profile = holder?.profiles as Row | null;
-              const hintRows = secret.hints as Row[] | null;
-              return (
-                <article key={String(secret.id)} className="bubble-card p-5">
-                  <div className="flex items-center justify-between">
-                    <p className="font-black text-pink-600">{String(profile?.display_name ?? "Player")}</p>
-                    <span className="rounded-full bg-pink-50 px-3 py-1 text-xs font-black">{String(secret.status)}</span>
-                  </div>
-                  <p className="display mt-3 text-2xl font-black">{String(secret.value)}</p>
-                  <div className="mt-3 flex items-center justify-between gap-2 text-sm text-[var(--muted)]">
-                    <span className="inline-flex items-center gap-1.5"><Lightbulb className="size-4" />{hintRows?.length ?? 0} hints</span>
-                    <span>Each costs {formatMoney(hintPrice, String(game.currency_symbol))} · set in game settings</span>
-                  </div>
-                  {hintRows?.length ? (
-                    <ul className="mt-3 space-y-2">
-                      {[...hintRows]
-                        .sort((a, b) => Number(a.position) - Number(b.position))
-                        .map((hint) => (
-                          <li key={String(hint.id)} className="rounded-2xl bg-pink-50/60 p-3">
-                            {String(hint.kind) === "text" ? (
-                              <form action={editHint} className="flex flex-wrap items-center gap-2">
-                                <input type="hidden" name="locale" value={locale} />
-                                <input type="hidden" name="gameId" value={String(game.id)} />
-                                <input type="hidden" name="hintId" value={String(hint.id)} />
-                                <input className="field min-w-0 flex-1" name="text" defaultValue={String(hint.text ?? "")} required />
-                                <button className="pill pill-secondary shrink-0">Save</button>
-                              </form>
-                            ) : (
-                              <p className="text-sm font-bold">Image hint</p>
-                            )}
-                            <form action={deleteHint} className="mt-2">
-                              <input type="hidden" name="locale" value={locale} />
-                              <input type="hidden" name="gameId" value={String(game.id)} />
-                              <input type="hidden" name="hintId" value={String(hint.id)} />
-                              <button className="text-xs font-black text-red-600 hover:underline">Delete</button>
-                            </form>
-                          </li>
-                        ))}
-                    </ul>
-                  ) : null}
-                  <form action={addSecretHolder} className="mt-3 flex gap-2">
+        {tab === "secrets" ? (() => {
+          const heldIds = new Set(
+            secrets.flatMap((s) => ((s.secret_holders as Row[] | null) ?? []).map((h) => String(h.player_id))),
+          );
+          const missingPlayers = players.filter((p) => !heldIds.has(String(p.id)));
+          const q = secretQuery.trim().toLowerCase();
+          const rows = secrets
+            .map((secret) => {
+              const holders = (secret.secret_holders as Row[] | null) ?? [];
+              const profile = (holders[0]?.game_players as Row | null)?.profiles as Row | null;
+              return {
+                secret,
+                holderPlayerId: holders[0]?.player_id ? String(holders[0].player_id) : null,
+                name: String(profile?.display_name ?? "Player"),
+                hintRows: [...(((secret.hints as Row[] | null) ?? []))].sort((a, b) => Number(a.position) - Number(b.position)),
+                status: String(secret.status),
+              };
+            })
+            .filter((r) => (q ? r.name.toLowerCase().includes(q) || String(r.secret.value).toLowerCase().includes(q) : true))
+            .filter((r) => {
+              if (secretFilter === "no-hints") return r.hintRows.length === 0;
+              if (secretFilter === "unlocked") return r.status === "draft";
+              if (secretFilter === "revealed") return r.status === "revealed";
+              return true;
+            });
+          const lockedCount = secrets.filter((s) => String(s.status) !== "draft").length;
+          const allIds = rows.map((r) => String(r.secret.id));
+          const allOpen = allIds.length > 0 && allIds.every((id) => openSecrets.has(id));
+
+          return (
+            <div className="space-y-3">
+              <div className="bubble-card flex flex-wrap items-center gap-2 p-3">
+                <input className="field h-10 min-w-[10rem] flex-1" placeholder="Search player or secret…" value={secretQuery} onChange={(e) => setSecretQuery(e.target.value)} />
+                <select className="field h-10 w-auto" value={secretFilter} onChange={(e) => setSecretFilter(e.target.value)}>
+                  <option value="all">All</option>
+                  <option value="no-hints">No hints</option>
+                  <option value="unlocked">Unlocked (draft)</option>
+                  <option value="revealed">Revealed</option>
+                </select>
+                <button type="button" className="pill pill-secondary h-10" onClick={() => setOpenSecrets(allOpen ? new Set() : new Set(allIds))}>
+                  {allOpen ? "Collapse all" : "Expand all"}
+                </button>
+                <form action={hostTransition} className="ml-auto">
+                  <input type="hidden" name="locale" value={locale} />
+                  <input type="hidden" name="gameId" value={String(game.id)} />
+                  <input type="hidden" name="action" value="lock_secrets" />
+                  <button className="pill pill-secondary h-10"><Eye size={16} /> Lock all secrets</button>
+                </form>
+                <span className="text-xs font-bold text-[var(--muted)]">{lockedCount}/{secrets.length} locked</span>
+              </div>
+
+              <details className="bubble-card overflow-hidden" open={!houseSecret}>
+                <summary className="flex cursor-pointer items-center gap-2 p-4 font-black">
+                  <Lightbulb className="text-amber-500" size={18} /> House Secret {houseSecret ? "" : "— not set"}
+                </summary>
+                <div className="border-t border-pink-100 p-5">
+                  <form action={createHouseSecret} className="grid gap-3 sm:grid-cols-2">
                     <input type="hidden" name="locale" value={locale} />
                     <input type="hidden" name="gameId" value={String(game.id)} />
-                    <input type="hidden" name="secretId" value={String(secret.id)} />
-                    <select className="field min-w-0" name="playerId" required defaultValue="">
-                      <option value="" disabled>Add shared holder…</option>
-                      {players.map((player) => {
-                        const p = player.profiles as Row | null;
-                        return <option key={String(player.id)} value={String(player.id)}>{String(p?.display_name ?? "Player")}</option>;
-                      })}
+                    <textarea className="field min-h-24 sm:col-span-2" name="answer" required defaultValue={houseSecret ? String(houseSecret.answer) : ""} placeholder="The game-wide mystery answer…" />
+                    <select className="field" name="mode" defaultValue={houseSecret ? String(houseSecret.mode) : "hybrid"}>
+                      <option value="competitive">Competitive</option><option value="cooperative">Cooperative</option><option value="hybrid">Hybrid</option>
                     </select>
-                    <button className="pill pill-secondary shrink-0">Add</button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input className="field" name="vault" type="number" min="0" defaultValue={houseSecret ? Number(houseSecret.vault) / 100 : 10000} aria-label="Vault" />
+                      <input className="field" name="attemptCost" type="number" min="0" defaultValue={houseSecret ? Number(houseSecret.attempt_cost) / 100 : 1000} aria-label="Attempt cost" />
+                    </div>
+                    <button className="pill pill-primary sm:col-span-2">Save House Secret</button>
                   </form>
-                  <details className="mt-4">
-                    <summary className="cursor-pointer font-bold">Add hint</summary>
-                    <form action={addHint} className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                  {houseSecret ? (
+                    <form action={addHouseClue} className="mt-5 grid gap-3 border-t border-pink-100 pt-5 sm:grid-cols-[6rem_1fr_auto_auto]">
                       <input type="hidden" name="locale" value={locale} />
                       <input type="hidden" name="gameId" value={String(game.id)} />
-                      <input type="hidden" name="secretId" value={String(secret.id)} />
-                      <input className="field" name="text" placeholder="A subtle clue…" required />
-                      <button className="pill pill-secondary">Add</button>
+                      <input type="hidden" name="houseSecretId" value={String(houseSecret.id)} />
+                      <input className="field" name="chapter" type="number" min="1" defaultValue="1" aria-label="Chapter" />
+                      <input className="field" name="text" required placeholder="A clue fragment…" />
+                      <label className="flex items-center gap-2 rounded-xl bg-pink-50 px-3 font-bold"><input type="checkbox" name="isDecoy" /> Decoy</label>
+                      <button className="pill pill-secondary">Release clue</button>
                     </form>
-                  </details>
-                  <details className="mt-3">
-                    <summary className="cursor-pointer font-bold">Add image hint</summary>
-                    <form action={addImageHint} className="mt-3 space-y-2">
-                      <input type="hidden" name="locale" value={locale} />
-                      <input type="hidden" name="gameId" value={String(game.id)} />
-                      <input type="hidden" name="secretId" value={String(secret.id)} />
-                      <input className="field" type="file" name="image" accept="image/png,image/jpeg,image/webp" required />
-                      <button className="pill pill-secondary w-full">Add image</button>
-                    </form>
-                  </details>
-                  <details className="mt-3">
-                    <summary className="cursor-pointer font-bold text-red-600">Replace secret</summary>
-                    <form action={replaceSecret} className="mt-3 space-y-2">
-                      <input type="hidden" name="locale" value={locale} />
-                      <input type="hidden" name="gameId" value={String(game.id)} />
-                      <input type="hidden" name="secretId" value={String(secret.id)} />
-                      <textarea className="field min-h-24" name="value" required defaultValue={String(secret.value)} />
-                      <input className="field" name="reason" required placeholder="Required audit reason" />
-                      <button className="pill bg-red-500 text-white">Replace with audit</button>
-                    </form>
-                  </details>
-                </article>
-              );
-            })}
-            {!secrets.length ? <Empty icon={Eye} text="Players have not submitted secrets yet." /> : null}
-          </div>
-        ) : null}
+                  ) : null}
+                </div>
+              </details>
+
+              <div className="bubble-card divide-y divide-pink-100 overflow-hidden">
+                {rows.map(({ secret, name, hintRows, status, holderPlayerId }) => {
+                  const sid = String(secret.id);
+                  const open = openSecrets.has(sid);
+                  const isDraft = status === "draft";
+                  return (
+                    <div key={sid}>
+                      <div className="flex items-center gap-3 p-4">
+                        <button
+                          type="button"
+                          onClick={() => setOpenSecrets((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(sid)) next.delete(sid); else next.add(sid);
+                            return next;
+                          })}
+                          className="grid size-7 shrink-0 place-items-center rounded-full bg-pink-50 text-pink-700"
+                          aria-expanded={open}
+                          aria-label="Toggle hints"
+                        >
+                          {open ? "−" : "+"}
+                        </button>
+                        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-pink-100 text-sm font-black text-pink-700">{name.slice(0, 1).toUpperCase()}</span>
+                        {isDraft && holderPlayerId ? (
+                          <form action={editSecret} className="flex min-w-0 flex-1 items-center gap-2">
+                            <input type="hidden" name="locale" value={locale} />
+                            <input type="hidden" name="gameId" value={String(game.id)} />
+                            <input type="hidden" name="playerId" value={holderPlayerId} />
+                            <span className="hidden shrink-0 text-xs font-bold text-pink-600 md:block">{name}</span>
+                            <input className="field h-9 min-w-0 flex-1" name="value" defaultValue={String(secret.value)} required />
+                            <button className="pill pill-secondary h-9 shrink-0 text-xs">Save</button>
+                          </form>
+                        ) : (
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-bold text-pink-600">{name}</p>
+                            <p className="display truncate font-black">{String(secret.value)}</p>
+                          </div>
+                        )}
+                        <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-black ${status === "revealed" ? "bg-violet-100 text-violet-800" : status === "locked" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{status}</span>
+                        <span className="hidden shrink-0 items-center gap-1 text-xs text-[var(--muted)] sm:inline-flex"><Lightbulb className="size-3.5" />{hintRows.length}</span>
+                      </div>
+                      {open ? (
+                        <div className="space-y-3 bg-pink-50/30 px-4 pb-4 pl-14">
+                          {hintRows.length ? (
+                            <ul className="space-y-2">
+                              {hintRows.map((hint) => (
+                                <li key={String(hint.id)} className="rounded-2xl bg-white p-3">
+                                  {String(hint.kind) === "text" ? (
+                                    <form action={editHint} className="flex flex-wrap items-center gap-2">
+                                      <input type="hidden" name="locale" value={locale} />
+                                      <input type="hidden" name="gameId" value={String(game.id)} />
+                                      <input type="hidden" name="hintId" value={String(hint.id)} />
+                                      <input className="field h-9 min-w-0 flex-1" name="text" defaultValue={String(hint.text ?? "")} required />
+                                      <button className="pill pill-secondary h-9 shrink-0 text-xs">Save</button>
+                                    </form>
+                                  ) : (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={`/api/assets/hints/${String(hint.id)}`} alt="Image hint" className="max-h-32 rounded-xl" />
+                                  )}
+                                  <div className="mt-1 flex items-center gap-3 text-xs">
+                                    <span className="text-[var(--muted)]">#{Number(hint.position) + 1}{hint.released_at ? " · released" : ""}</span>
+                                    <form action={deleteHint}>
+                                      <input type="hidden" name="locale" value={locale} />
+                                      <input type="hidden" name="gameId" value={String(game.id)} />
+                                      <input type="hidden" name="hintId" value={String(hint.id)} />
+                                      <button className="font-black text-red-600 hover:underline">Delete</button>
+                                    </form>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : <p className="text-xs text-[var(--muted)]">No hints yet.</p>}
+
+                          <form action={addHint} className="grid gap-2 rounded-2xl bg-white p-3 sm:grid-cols-[1fr_auto]">
+                            <input type="hidden" name="locale" value={locale} />
+                            <input type="hidden" name="gameId" value={String(game.id)} />
+                            <input type="hidden" name="secretId" value={sid} />
+                            <input className="field h-9" name="text" placeholder="Text clue (optional)" />
+                            <button className="pill pill-primary h-9 text-xs sm:row-span-2">Add hint</button>
+                            <input className="field h-9 text-xs" type="file" name="image" accept="image/png,image/jpeg,image/webp" />
+                            <p className="text-xs text-[var(--muted)] sm:col-span-2">Fill the text, attach an image, or both.</p>
+                          </form>
+
+                          <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+                            <form action={addSecretHolder} className="flex gap-2">
+                              <input type="hidden" name="locale" value={locale} />
+                              <input type="hidden" name="gameId" value={String(game.id)} />
+                              <input type="hidden" name="secretId" value={sid} />
+                              <select className="field h-9 w-auto text-xs" name="playerId" required defaultValue="">
+                                <option value="" disabled>Add shared holder…</option>
+                                {players.map((player) => {
+                                  const p = player.profiles as Row | null;
+                                  return <option key={String(player.id)} value={String(player.id)}>{String(p?.display_name ?? "Player")}</option>;
+                                })}
+                              </select>
+                              <button className="pill pill-secondary h-9 shrink-0 text-xs">Add</button>
+                            </form>
+                            <details>
+                              <summary className="cursor-pointer text-xs font-bold text-red-600">Replace with audit</summary>
+                              <form action={replaceSecret} className="mt-2 space-y-2">
+                                <input type="hidden" name="locale" value={locale} />
+                                <input type="hidden" name="gameId" value={String(game.id)} />
+                                <input type="hidden" name="secretId" value={sid} />
+                                <textarea className="field min-h-20" name="value" required defaultValue={String(secret.value)} />
+                                <input className="field h-9" name="reason" required placeholder="Required audit reason" />
+                                <button className="pill h-9 bg-red-500 text-xs text-white">Replace</button>
+                              </form>
+                            </details>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+                {!rows.length ? <p className="p-6 text-center text-[var(--muted)]">{secrets.length ? "No secrets match." : "Players have not submitted secrets yet."}</p> : null}
+              </div>
+
+              {missingPlayers.length && (secretFilter === "all" || secretFilter === "no-hints") ? (
+                <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">
+                  {missingPlayers.length} without a secret: {missingPlayers.map((p) => String((p.profiles as Row | null)?.display_name ?? "Player")).join(", ")}. Use <span className="font-bold">Settings → Fill missing secrets</span>.
+                </p>
+              ) : null}
+            </div>
+          );
+        })() : null}
 
         {tab === "buzzes" ? (
           <div className="space-y-3">
@@ -691,37 +805,6 @@ export function HostControlRoom({
               </article>
             ))}
             {!events.length ? <Empty icon={Gamepad2} text="Trigger a dilemma, power, surprise mission or announcement." /> : null}
-          </div>
-        ) : null}
-
-        {tab === "house" ? (
-          <div className="bubble-card p-6">
-            <Lightbulb className="text-amber-500" size={32} />
-            <h2 className="display mt-4 text-3xl font-black">House Secret</h2>
-            <form action={createHouseSecret} className="mt-5 grid gap-3 sm:grid-cols-2">
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="gameId" value={String(game.id)} />
-              <textarea className="field min-h-28 sm:col-span-2" name="answer" required defaultValue={houseSecret ? String(houseSecret.answer) : ""} placeholder="The game-wide mystery answer…" />
-              <select className="field" name="mode" defaultValue={houseSecret ? String(houseSecret.mode) : "hybrid"}>
-                <option value="competitive">Competitive</option><option value="cooperative">Cooperative</option><option value="hybrid">Hybrid</option>
-              </select>
-              <div className="grid grid-cols-2 gap-2">
-                <input className="field" name="vault" type="number" min="0" defaultValue={houseSecret ? Number(houseSecret.vault) / 100 : 10000} aria-label="Vault" />
-                <input className="field" name="attemptCost" type="number" min="0" defaultValue={houseSecret ? Number(houseSecret.attempt_cost) / 100 : 1000} aria-label="Attempt cost" />
-              </div>
-              <button className="pill pill-primary sm:col-span-2">Save House Secret</button>
-            </form>
-            {houseSecret ? (
-              <form action={addHouseClue} className="mt-6 grid gap-3 border-t border-pink-100 pt-6 sm:grid-cols-[6rem_1fr_auto_auto]">
-                <input type="hidden" name="locale" value={locale} />
-                <input type="hidden" name="gameId" value={String(game.id)} />
-                <input type="hidden" name="houseSecretId" value={String(houseSecret.id)} />
-                <input className="field" name="chapter" type="number" min="1" defaultValue="1" aria-label="Chapter" />
-                <input className="field" name="text" required placeholder="A clue fragment…" />
-                <label className="flex items-center gap-2 rounded-xl bg-pink-50 px-3 font-bold"><input type="checkbox" name="isDecoy" /> Decoy</label>
-                <button className="pill pill-secondary">Release clue</button>
-              </form>
-            ) : null}
           </div>
         ) : null}
 

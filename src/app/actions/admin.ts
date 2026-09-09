@@ -174,18 +174,51 @@ export async function validateMission(formData: FormData) {
 // Every hint costs the same — the price is set once in the base game settings
 // (`hintPrice` in the round config) and applied by `buy_next_hint`. Hints
 // therefore carry no per-hint price; `default_price` stays 0.
+// One "Add hint" form now carries an optional text line and an optional image —
+// either or both (item 7). Both filled => two ordered deck entries (text then
+// image); the hint_kind enum stays single-valued so nothing downstream changes.
 export async function addHint(formData: FormData) {
   const parsed = base.extend({
     secretId: z.string().uuid(),
-    text: z.string().trim().min(1).max(500),
+    text: z.string().trim().max(500).optional().default(""),
+  }).parse(Object.fromEntries(formData));
+  const image = optionalImage(formData.get("image"));
+  if (!parsed.text && !image) throw new Error("hint_needs_content");
+
+  const supabase = await createClient();
+  const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
+  if (!allowed) throw new Error("forbidden");
+  const { count } = await supabase.from("hints").select("id", { count: "exact", head: true }).eq("secret_id", parsed.secretId);
+  let position = count ?? 0;
+
+  const rows: Record<string, unknown>[] = [];
+  if (parsed.text) {
+    rows.push({ secret_id: parsed.secretId, kind: "text", text: parsed.text, position: position++ });
+  }
+  if (image) {
+    const path = `games/${parsed.gameId}/hints/${crypto.randomUUID()}.${image.type.split("/")[1].replace("jpeg", "jpg")}`;
+    const { error: uploadError } = await createAdminClient().storage.from("game-assets").upload(path, image, { contentType: image.type });
+    if (uploadError) throw new Error(uploadError.message);
+    rows.push({ secret_id: parsed.secretId, kind: "image", asset_path: path, position: position++ });
+  }
+
+  const { error } = await supabase.from("hints").insert(rows);
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+// Lightweight edit of a still-draft secret's text (host or the holder). Locked
+// or revealed secrets must go through replaceSecret, which writes an audit row.
+export async function editSecret(formData: FormData) {
+  const parsed = base.extend({
+    playerId: z.string().uuid(),
+    value: z.string().trim().min(1).max(500),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
-  const { count } = await supabase.from("hints").select("id", { count: "exact", head: true }).eq("secret_id", parsed.secretId);
-  const { error } = await supabase.from("hints").insert({
-    secret_id: parsed.secretId,
-    kind: "text",
-    text: parsed.text,
-    position: count ?? 0,
+  const { error } = await supabase.rpc("submit_player_secret", {
+    p_game_id: parsed.gameId,
+    p_player_id: parsed.playerId,
+    p_value: parsed.value,
   });
   if (error) throw new Error(error.message);
   refresh(parsed.locale, parsed.gameId);
@@ -224,26 +257,11 @@ function checkedImage(value: FormDataEntryValue | null) {
   return value;
 }
 
-export async function addImageHint(formData: FormData) {
-  const parsed = base.extend({
-    secretId: z.string().uuid(),
-  }).parse(Object.fromEntries(formData));
-  const file = checkedImage(formData.get("image"));
-  const supabase = await createClient();
-  const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
-  if (!allowed) throw new Error("forbidden");
-  const { count } = await supabase.from("hints").select("id", { count: "exact", head: true }).eq("secret_id", parsed.secretId);
-  const path = `games/${parsed.gameId}/hints/${crypto.randomUUID()}.${file.type.split("/")[1].replace("jpeg", "jpg")}`;
-  const { error: uploadError } = await createAdminClient().storage.from("game-assets").upload(path, file, { contentType: file.type });
-  if (uploadError) throw new Error(uploadError.message);
-  const { error } = await supabase.from("hints").insert({
-    secret_id: parsed.secretId,
-    kind: "image",
-    asset_path: path,
-    position: count ?? 0,
-  });
-  if (error) throw new Error(error.message);
-  refresh(parsed.locale, parsed.gameId);
+// Like checkedImage but tolerates "no file chosen" — used where the image is
+// one optional half of a form.
+function optionalImage(value: FormDataEntryValue | null) {
+  if (!(value instanceof File) || value.size === 0) return null;
+  return checkedImage(value);
 }
 
 export async function uploadGameBackground(formData: FormData) {
