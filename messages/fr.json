@@ -7,161 +7,74 @@
     "signOut": "Déconnexion"
   },
   "landing": {
-    "eyebrow": "Votre soirée. Vos secrets. Vos règles.",
-    "title": "Un jeu de soirée rempli de secrets, d’indices et de délicieux chaos.",
-    "subtitle": "Créez des équipes, relevez des missions secrètes, achetez des indices et buzzez vos amis—depuis chaque téléphone.",
-    "start": "Créer une partie",
+    "eyebrow": "Jeu de soirée · 4 à 16 joueurs",
+    "title": "Vos amis vous mentent.",
+    "subtitle": "Missions secrètes, échanges d’indices et duels au buzzer—depuis le téléphone de chacun.",
+    "start": "Lancer une partie",
     "login": "Se connecter",
-    "howCta": "Comment ça marche",
     "meta": {
       "title": "Un jeu de soirée de secrets, d’indices et de missions",
       "description": "Secrets est un jeu de soirée en temps réel pensé pour mobile. Formez des équipes, menez des missions secrètes, échangez des indices et buzzez vos amis depuis chaque téléphone, avec un tableau grand écran pour la pièce."
     },
-    "nav": {
-      "how": "Comment ça marche",
-      "features": "Fonctionnalités",
-      "formats": "Formats",
-      "faq": "FAQ"
-    },
-    "trust": [
-      "Aucune appli à installer",
-      "Gratuit",
-      "4 à 16 joueurs",
-      "Français et anglais"
+    "ribbon": [
+      "Créez une partie",
+      "Partagez un lien",
+      "Jouez depuis vos téléphones"
     ],
-    "mock": {
+    "hero": {
       "round": "Manche 2",
       "phase": "Enquête solo",
-      "wallet": "Votre portefeuille",
-      "hints": "Indices possédés",
       "buzz": "BUZZ"
     },
-    "screens": {
-      "title": "Une partie, deux écrans",
-      "subtitle": "Chaque joueur utilise son téléphone pour ses indices privés, ses missions et ses buzzes. Un écran partagé plante le décor pour la pièce.",
-      "phone": {
-        "title": "Dans votre poche",
-        "body": "Votre secret, votre portefeuille, vos missions et chaque buzz—de gros boutons, rien de superflu, rien que la pièce ne voit."
+    "moments": [
+      {
+        "title": "Quelqu’un buzze",
+        "line": "Un geste. Accusation lancée."
       },
-      "tv": {
-        "title": "Sur le grand écran",
-        "body": "Diffusez le tableau sur un téléviseur ou un portable : manches en direct, soldes de la maison, révélations d’indices spectaculaires et face-à-face—sans divulgâcher."
+      {
+        "title": "La pièce s’enflamme",
+        "line": "Le grand écran se retourne contre vous.",
+        "quote": "Je les ai vus près du coffre."
+      },
+      {
+        "title": "Trouvé — ou pas",
+        "line": "Des confettis, ou une sirène."
+      },
+      {
+        "title": "Partager ou voler",
+        "line": "Un choix muet décide du butin."
+      },
+      {
+        "title": "Les secrets éclatent",
+        "line": "Une révélation vide tous les indices dans le Coffre."
       }
-    },
-    "how": {
-      "title": "Le déroulement d’une soirée",
-      "subtitle": "Prêt en une minute, du jeu pour toute la soirée.",
-      "steps": [
-        {
-          "title": "Créez une partie",
-          "body": "Choisissez Soirée éclair, Week-end ou un enchaînement de manches sur mesure, puis fixez la cagnotte de départ."
-        },
-        {
-          "title": "Partagez un seul lien",
-          "body": "Invitez vos amis par courriel—un lien unique, filtré par votre liste d’invités."
-        },
-        {
-          "title": "Chacun rejoint depuis son téléphone",
-          "body": "Les joueurs reçoivent un secret, une équipe et un portefeuille. Ouvrez le tableau sur le téléviseur."
-        },
-        {
-          "title": "Jouez les manches",
-          "body": "Enquêtez, menez des missions, échangez des indices, buzzez des accusations et tranchez les dilemmes Partager/Voler."
-        }
-      ]
-    },
-    "features": {
-      "title": "Tout ce qu’il faut pour la soirée",
-      "items": [
-        {
-          "title": "Pensé pour mobile",
-          "body": "De grandes commandes, des indices privés et des buzzes dans la poche de chacun."
-        },
-        {
-          "title": "Un tableau grand écran",
-          "body": "Un écran spectaculaire, sans divulgâcher, conçu pour la pièce."
-        },
-        {
-          "title": "Mises à jour en direct",
-          "body": "Manches, soldes et révélations restent parfaitement synchronisés."
-        },
-        {
-          "title": "Secrets, indices et missions",
-          "body": "Secrets privés ou partagés, jeux d’indices texte et image, et missions arbitrées par l’animateur."
-        },
-        {
-          "title": "Portefeuilles et registre équitable",
-          "body": "Portefeuilles personnels et d’équipe adossés à un registre immuable et équilibré."
-        },
-        {
-          "title": "Buzzes et dilemmes",
-          "body": "Buzzes d’accusation, buzzes d’indice payants et dilemmes d’équipe Partager/Voler simultanés."
-        }
-      ]
-    },
+    ],
     "formats": {
-      "title": "Choisissez un format",
-      "subtitle": "Le format définit l’économie et l’enchaînement des manches. Ajustez tout ensuite.",
+      "title": "Trois façons de jouer",
       "items": [
         {
           "name": "Soirée éclair",
           "time": "~45 min",
-          "flow": "Enquête d’équipe → Enquête solo → Secret de la Maison → Finale."
+          "line": "Une soirée, un coupable."
         },
         {
           "name": "Week-end",
-          "time": "Une soirée entière",
-          "flow": "Enquêtes d’équipe et solo, un événement surprise, des nominations et une finale."
+          "time": "Toute la nuit",
+          "line": "Événements, nominations, trahisons."
         },
         {
           "name": "Sur mesure",
-          "time": "À vous de voir",
-          "flow": "Ajoutez, réorganisez et dupliquez des manches d’équipe, solo, événement, nomination, élimination et finale."
+          "time": "Vos règles",
+          "line": "Composez le chaos vous-même."
         }
       ]
     },
-    "fair": {
-      "title": "Convivial par conception",
-      "items": [
-        "Pas d’argent réel—chaque solde est de la monnaie de jeu.",
-        "Un solde à zéro ou un secret révélé ne vous élimine jamais.",
-        "Seule une manche d’élimination ajoutée par l’animateur change qui reste en jeu.",
-        "L’animateur arbitre les missions et peut corriger une erreur, motif à l’appui."
-      ]
-    },
-    "faq": {
-      "title": "Vos questions, nos réponses",
-      "items": [
-        {
-          "q": "Que faut-il pour jouer?",
-          "body": "Un téléphone chacun et un écran partagé—téléviseur ou portable—pour le tableau. Aucun téléchargement."
-        },
-        {
-          "q": "Combien de personnes peuvent jouer?",
-          "body": "C’est conçu pour une pièce d’amis, environ 4 à 16, réparties en équipes."
-        },
-        {
-          "q": "Combien de temps dure une partie?",
-          "body": "Soirée éclair dure environ 45 minutes; Week-end remplit toute la soirée."
-        },
-        {
-          "q": "Y a-t-il de l’argent réel en jeu?",
-          "body": "Jamais. Tous les portefeuilles utilisent de la monnaie de jeu et il n’y a aucun transfert entre joueurs."
-        },
-        {
-          "q": "Faut-il préparer des secrets à l’avance?",
-          "body": "Non. Les joueurs sans secret personnel en reçoivent un tiré d’un paquet, pour commencer tout de suite."
-        }
-      ]
-    },
+    "fairLine": "Monnaie de jeu seulement. Personne n’est jamais éliminé.",
     "cta": {
       "title": "Réunissez vos amis. Gardez vos secrets.",
-      "body": "Montez une partie en une minute et envoyez le lien.",
-      "button": "Créer une partie"
+      "button": "Lancer une partie"
     },
     "footer": {
-      "tagline": "Un jeu de soirée en temps réel, pensé pour mobile : secrets, indices, missions et stratégie.",
-      "language": "Langue",
       "rights": "Sans lien avec une émission de télévision. Aucun nom, logo ni contenu de tiers."
     }
   },

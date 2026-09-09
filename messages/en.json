@@ -7,161 +7,74 @@
     "signOut": "Sign out"
   },
   "landing": {
-    "eyebrow": "Your night. Your secrets. Your rules.",
-    "title": "A party game full of secrets, clues and delicious chaos.",
-    "subtitle": "Create teams, complete secret missions, buy clues and buzz your friends—right from everyone’s phone.",
-    "start": "Create a game",
+    "eyebrow": "Party game · 4–16 players",
+    "title": "Your friends are lying to you.",
+    "subtitle": "Secret missions, clue deals and buzzer showdowns—straight from everyone’s phone.",
+    "start": "Start a game",
     "login": "Sign in",
-    "howCta": "How it works",
     "meta": {
       "title": "A party game of secrets, clues and missions",
       "description": "Secrets is a mobile-first realtime party game. Build teams, run secret missions, trade clues and buzz your friends from every phone, with a big-screen dashboard for the room."
     },
-    "nav": {
-      "how": "How it works",
-      "features": "Features",
-      "formats": "Formats",
-      "faq": "FAQ"
-    },
-    "trust": [
-      "No app to install",
-      "Free to play",
-      "4–16 players",
-      "English & French"
+    "ribbon": [
+      "Create a game",
+      "Share one link",
+      "Play from your phones"
     ],
-    "mock": {
+    "hero": {
       "round": "Round 2",
       "phase": "Solo investigation",
-      "wallet": "Your wallet",
-      "hints": "Hints owned",
       "buzz": "BUZZ"
     },
-    "screens": {
-      "title": "One game, two screens",
-      "subtitle": "Every player uses their phone for private clues, missions and buzzes. One shared screen sets the scene for the room.",
-      "phone": {
-        "title": "In your pocket",
-        "body": "Your secret, your wallet, your missions and every buzz—big buttons, no clutter, nothing the room can see."
+    "moments": [
+      {
+        "title": "Someone buzzes",
+        "line": "One tap. Full accusation."
       },
-      "tv": {
-        "title": "On the big screen",
-        "body": "Cast the dashboard to a TV or laptop for live rounds, house balances, dramatic clue drops and face-offs—safe for everyone to watch."
+      {
+        "title": "The room erupts",
+        "line": "The big screen turns on you.",
+        "quote": "I saw them near the vault."
+      },
+      {
+        "title": "Cracked it — or not",
+        "line": "Confetti, or a siren."
+      },
+      {
+        "title": "Share or steal",
+        "line": "One silent choice decides the payout."
+      },
+      {
+        "title": "Secrets spill",
+        "line": "A reveal dumps every hint into the Vault."
       }
-    },
-    "how": {
-      "title": "How a game night runs",
-      "subtitle": "Set up in a minute, play for an evening.",
-      "steps": [
-        {
-          "title": "Create a game",
-          "body": "Pick Quick Night, Weekend or a custom round schedule and set the starting cash."
-        },
-        {
-          "title": "Share one link",
-          "body": "Invite friends by email—one join link, gated by your guest list."
-        },
-        {
-          "title": "Everyone joins on their phone",
-          "body": "Players get a secret, a team and a wallet. Open the dashboard on the TV."
-        },
-        {
-          "title": "Play the rounds",
-          "body": "Investigate, run missions, trade clues, buzz accusations and settle Share/Steal dilemmas."
-        }
-      ]
-    },
-    "features": {
-      "title": "Everything the night needs",
-      "items": [
-        {
-          "title": "Made for phones",
-          "body": "Big controls, private clues and buzzes in everyone’s pocket."
-        },
-        {
-          "title": "A big-screen dashboard",
-          "body": "A dramatic, spoiler-safe screen built for the room."
-        },
-        {
-          "title": "Live game updates",
-          "body": "Rounds, balances and reveals stay perfectly in sync."
-        },
-        {
-          "title": "Secrets, clues & missions",
-          "body": "Private or shared secrets, text and image hint decks, and host-judged missions."
-        },
-        {
-          "title": "Wallets & a fair ledger",
-          "body": "Personal and team wallets backed by an immutable, balanced ledger."
-        },
-        {
-          "title": "Buzzes & dilemmas",
-          "body": "Accusation buzzes, paid hint buzzes and simultaneous Share/Steal team dilemmas."
-        }
-      ]
-    },
+    ],
     "formats": {
-      "title": "Pick a format",
-      "subtitle": "The format sets the economy and the round schedule. Fine-tune everything later.",
+      "title": "Three ways to play",
       "items": [
         {
           "name": "Quick Night",
           "time": "~45 min",
-          "flow": "Team investigation → Solo investigation → House Secret → Finale."
+          "line": "One evening, one culprit."
         },
         {
           "name": "Weekend",
-          "time": "A full evening",
-          "flow": "Team and solo investigations, a surprise event, nominations and a finale."
+          "time": "All night",
+          "line": "Events, nominations, betrayal."
         },
         {
           "name": "Custom",
-          "time": "Your call",
-          "flow": "Add, reorder and duplicate team, solo, event, nomination, elimination and finale rounds."
+          "time": "Your rules",
+          "line": "Build the chaos yourself."
         }
       ]
     },
-    "fair": {
-      "title": "Friendly by design",
-      "items": [
-        "No real money—every balance is in-game play cash.",
-        "A zero balance or a revealed secret never knocks you out.",
-        "Only a host-added elimination round can change who’s still in play.",
-        "The host adjudicates missions and can reverse mistakes, with reasons on record."
-      ]
-    },
-    "faq": {
-      "title": "Questions, answered",
-      "items": [
-        {
-          "q": "What do I need to play?",
-          "body": "A phone each and one shared screen—a TV or a laptop—for the dashboard. No downloads."
-        },
-        {
-          "q": "How many people can play?",
-          "body": "It’s built for a room of friends, roughly 4 to 16, split into teams."
-        },
-        {
-          "q": "How long does a game take?",
-          "body": "Quick Night runs around 45 minutes; Weekend fills a whole evening."
-        },
-        {
-          "q": "Is there real money involved?",
-          "body": "Never. All wallets use in-game cash and there are no transfers between players."
-        },
-        {
-          "q": "Do I need to prepare secrets in advance?",
-          "body": "No. Players with no secret of their own are dealt one from a pack, so you can start right away."
-        }
-      ]
-    },
+    "fairLine": "Play money only. Nobody ever gets knocked out.",
     "cta": {
       "title": "Gather your friends. Keep your secrets.",
-      "body": "Set up a game in a minute and send the link.",
-      "button": "Create a game"
+      "button": "Start a game"
     },
     "footer": {
-      "tagline": "A mobile-first realtime party game of secrets, clues, missions and strategy.",
-      "language": "Language",
       "rights": "Not affiliated with any TV show. No third-party names, logos or assets."
     }
   },
