@@ -62,7 +62,8 @@
     "create": "Créer la partie",
     "quick": "Soirée express",
     "weekend": "Week-end",
-    "custom": "Sur mesure"
+    "custom": "Sur mesure",
+    "templateNote": "Le format définit l’économie et le calendrier des manches. Vous pourrez tout ajuster ensuite dans l’onglet Réglages de la partie."
   },
   "play": {
     "wallet": "Ma cagnotte",
@@ -88,6 +89,7 @@
     "economy": "Économie",
     "events": "Événements et pouvoirs",
     "votes": "Votes",
+    "settings": "Réglages",
     "display": "Ouvrir l’écran TV",
     "lock": "Verrouiller les secrets",
     "nextRound": "Lancer la prochaine manche"

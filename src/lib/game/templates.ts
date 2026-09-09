@@ -102,3 +102,21 @@ export const gameFormats = {
   ],
   custom: [],
 } as const;
+
+export type GameFormat = keyof typeof gameFormats;
+
+// Format templates are more than a round list: Quick Night runs a looser
+// economy (more starting cash, cheaper buzzes) so a party can start fast;
+// Weekend is tighter. Amounts are in whole currency units — callers convert
+// to the integer minor units the ledger stores.
+export type FormatEconomy = {
+  startingCash: number;
+  accusationStake: number;
+  hintPrice: number;
+};
+
+export const formatEconomy: Record<GameFormat, FormatEconomy> = {
+  quick: { startingCash: 2000, accusationStake: 1000, hintPrice: 750 },
+  weekend: { startingCash: 1000, accusationStake: 1000, hintPrice: 750 },
+  custom: { startingCash: 1500, accusationStake: 1000, hintPrice: 750 },
+};

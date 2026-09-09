@@ -46,10 +46,9 @@ export default async function NewGamePage({
             })}
           </div>
         </fieldset>
-        <label className="block font-bold">
-          {t("cash")}
-          <input className="field mt-2" name="startingCash" type="number" min="0" defaultValue="10000" required />
-        </label>
+        <p className="rounded-2xl bg-pink-50 p-4 text-sm text-[var(--muted)]">
+          {t("templateNote")}
+        </p>
         <button className="pill pill-primary w-full" disabled={!organizationId}>
           <Sparkles size={18} /> {t("create")}
         </button>

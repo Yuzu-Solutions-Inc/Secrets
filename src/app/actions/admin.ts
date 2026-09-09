@@ -339,6 +339,57 @@ export async function setPlayerPlayStatus(formData: FormData) {
   refresh(parsed.locale, parsed.gameId);
 }
 
+export async function updateGameSettings(formData: FormData) {
+  const parsed = base.extend({
+    startingCash: z.coerce.number().int().min(0).max(100_000_000),
+    accusationStake: z.coerce.number().int().min(0).max(100_000_000),
+    hintPrice: z.coerce.number().int().min(0).max(100_000_000),
+    language: z.enum(["en", "fr"]),
+    location: z.string().trim().max(200).optional().default(""),
+    startsAt: z.string().trim().optional().default(""),
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+
+  const { data: game } = await supabase
+    .from("games")
+    .select("settings")
+    .eq("id", parsed.gameId)
+    .single();
+  const settings = (game?.settings ?? {}) as Record<string, unknown>;
+  const accusationStake = parsed.accusationStake * 100;
+  const hintPrice = parsed.hintPrice * 100;
+
+  const { error } = await supabase
+    .from("games")
+    .update({
+      starting_cash: parsed.startingCash * 100,
+      starts_at: parsed.startsAt ? new Date(parsed.startsAt).toISOString() : null,
+      settings: {
+        ...settings,
+        economy: { accusationStake, hintPrice },
+        language: parsed.language,
+        location: parsed.location || null,
+      },
+    })
+    .eq("id", parsed.gameId);
+  if (error) throw new Error(error.message);
+
+  // The buzz / hint prices are a single game-wide value; every round
+  // inherits it (matches how the host UI already reads one price).
+  const { data: rounds } = await supabase
+    .from("game_rounds")
+    .select("id,config")
+    .eq("game_id", parsed.gameId);
+  for (const round of rounds ?? []) {
+    const config = (round.config ?? {}) as Record<string, unknown>;
+    await supabase
+      .from("game_rounds")
+      .update({ config: { ...config, accusationStake, hintPrice } })
+      .eq("id", round.id as string);
+  }
+  refresh(parsed.locale, parsed.gameId);
+}
+
 export async function adjustWallet(formData: FormData) {
   const parsed = base.extend({
     playerId: z.string().uuid(),

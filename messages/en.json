@@ -62,7 +62,8 @@
     "create": "Create game",
     "quick": "Quick Night",
     "weekend": "Weekend",
-    "custom": "Custom"
+    "custom": "Custom",
+    "templateNote": "The format sets the economy and the round schedule. You can fine-tune everything later in the game's Settings tab."
   },
   "play": {
     "wallet": "My wallet",
@@ -88,6 +89,7 @@
     "economy": "Economy",
     "events": "Events & powers",
     "votes": "Votes",
+    "settings": "Settings",
     "display": "Open TV dashboard",
     "lock": "Lock secrets",
     "nextRound": "Start next round"

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { gameFormats, roundTemplates } from "@/lib/game/templates";
+import { formatEconomy, gameFormats, roundTemplates } from "@/lib/game/templates";
 import { roundConfigSchema } from "@/lib/game/rules";
 import { getUser } from "@/lib/auth/session";
 import { setActiveOrganizationId } from "@/lib/auth/active-org";
@@ -79,27 +79,33 @@ export async function createGame(formData: FormData) {
     organizationId: z.string().uuid(),
     title: z.string().trim().min(2).max(100),
     format: z.enum(["quick", "weekend", "custom"]),
-    startingCash: z.coerce.number().int().min(0).max(100_000_000),
     locale: localeSchema,
   }).parse({
     organizationId: formData.get("organizationId"),
     title: formData.get("title"),
     format: formData.get("format"),
-    startingCash: formData.get("startingCash"),
     locale: formData.get("locale"),
   });
   const user = await actor();
   const supabase = await createClient();
   const code = randomBytes(4).toString("hex").toUpperCase();
+
+  // The chosen format is a template: it decides the economy and the round
+  // set. Everything here is editable afterwards in the game's Settings tab.
+  const economy = formatEconomy[parsed.format];
+  const accusationStake = economy.accusationStake * 100;
+  const hintPrice = economy.hintPrice * 100;
+
   const { data: game, error } = await supabase
     .from("games")
     .insert({
       organization_id: parsed.organizationId,
       title: parsed.title,
       format: parsed.format,
-      starting_cash: parsed.startingCash * 100,
+      starting_cash: economy.startingCash * 100,
       public_code: code,
       created_by: user.id,
+      settings: { economy: { accusationStake, hintPrice }, language: parsed.locale },
     })
     .select("id")
     .single();
@@ -108,14 +114,26 @@ export async function createGame(formData: FormData) {
   await supabase.from("game_players").insert({ game_id: game.id, user_id: user.id });
   const keys = gameFormats[parsed.format];
   if (keys.length) {
+    // Anchor the schedule on "now" and lay rounds back to back; the host
+    // shifts them on the Rounds page.
+    let cursor = Date.now();
     const rows = keys.map((key, position) => {
       const template = roundTemplates.find((item) => item.key === key)!;
+      const config = roundConfigSchema.parse({
+        ...template.config,
+        accusationStake,
+        hintPrice,
+      });
+      const startsAt = new Date(cursor);
+      cursor += config.durationMinutes * 60_000;
       return {
         game_id: game.id,
         title: template.title[parsed.locale],
         kind: template.kind,
         position,
-        config: roundConfigSchema.parse(template.config),
+        config,
+        starts_at: startsAt.toISOString(),
+        ends_at: new Date(cursor).toISOString(),
       };
     });
     const { error: roundsError } = await supabase.from("game_rounds").insert(rows);
