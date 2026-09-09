@@ -43,6 +43,7 @@ import {
   publishEvent,
   replaceSecret,
   settleTeamDilemma,
+  saveFinaleConfig,
   saveWinnerFormula,
   setPlayerPlayStatus,
   startMission,
@@ -94,6 +95,12 @@ export function HostControlRoom({
   const [openSecrets, setOpenSecrets] = useState<Set<string>>(new Set());
   const [openRound, setOpenRound] = useState<string | null>(null);
   const [broadcastType, setBroadcastType] = useState("announcement");
+  const [finaleEntryMode, setFinaleEntryMode] = useState<string>(
+    () => String((((game.settings as Row | null)?.finale as Row | undefined)?.entry as Row | undefined)?.mode ?? "all_active"),
+  );
+  const [finaleMethod, setFinaleMethod] = useState<string>(
+    () => String((((game.settings as Row | null)?.finale as Row | undefined)?.resolution as Row | undefined)?.method ?? "formula"),
+  );
 
   // Once the game has started, the invite panel is replaced by the host's
   // money-correction tools (item 11).
@@ -137,7 +144,7 @@ export function HostControlRoom({
     ["buzzes", t("buzzes"), Megaphone],
     ["missions", t("missions"), Sparkles],
     ["broadcast", t("broadcast"), Megaphone],
-    ["votes", t("votes"), Vote],
+    ["votes", t("finale"), Vote],
     ["settings", t("settings"), SlidersHorizontal],
   ] as const;
 
@@ -146,6 +153,9 @@ export function HostControlRoom({
   const settingsAccusationStake = Number(economy.accusation_stake ?? economy.accusationStake ?? hintPriceConfig?.accusationStake ?? 0);
   const settingsHintPrice = Number(economy.hint_price ?? economy.hintPrice ?? hintPrice);
   const startsAtLocal = game.starts_at ? new Date(String(game.starts_at)).toISOString().slice(0, 16) : "";
+  const finaleCfg = (settings.finale ?? {}) as Row;
+  const finaleEntry = (finaleCfg.entry ?? {}) as Row;
+  const finaleRes = (finaleCfg.resolution ?? {}) as Row;
 
   return (
     <section className="mx-auto max-w-5xl pb-20">
@@ -971,25 +981,94 @@ export function HostControlRoom({
         ) : null}
 
         {tab === "votes" ? (
-          <div className="bubble-card p-6">
-            <Vote className="text-pink-600" />
-            <h2 className="display mt-4 text-3xl font-black">Finale formula</h2>
-            <p className="mt-2 text-[var(--muted)]">Choose how money, protected secrets, missions, the House Secret and votes determine the winner.</p>
-            <form action={saveWinnerFormula} className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className="space-y-3">
+            <form action={saveFinaleConfig} className="bubble-card grid gap-4 p-6">
               <input type="hidden" name="locale" value={locale} />
               <input type="hidden" name="gameId" value={String(game.id)} />
-              {[
-                ["moneyWeight", "Money multiplier", "1"],
-                ["protectedSecretBonus", "Protected secret bonus", "5000"],
-                ["houseSecretBonus", "House Secret bonus", "5000"],
-                ["missionBonus", "Per mission bonus", "500"],
-                ["voteBonus", "Per finale vote", "1000"],
-              ].map(([name, label, value]) => (
-                <label key={name} className="font-bold">{label}<input className="field mt-1" name={name} type="number" min="0" step={name === "moneyWeight" ? ".1" : "1"} defaultValue={value} /></label>
-              ))}
-              <button className="pill pill-primary sm:col-span-2">Save winner formula</button>
+              <div>
+                <Vote className="text-pink-600" />
+                <h2 className="display mt-3 text-3xl font-black">Finale</h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">Who reaches the finale, and how the winner is decided.</p>
+              </div>
+
+              <fieldset className="grid gap-3 sm:grid-cols-2">
+                <legend className="font-black">Who plays the finale</legend>
+                <label className="font-bold">Entry
+                  <select className="field mt-1" name="entryMode" value={finaleEntryMode} onChange={(e) => setFinaleEntryMode(e.target.value)}>
+                    <option value="all_active">All active players</option>
+                    <option value="top_n_by_balance">Top N by balance</option>
+                    <option value="top_n_by_score">Top N by score</option>
+                    <option value="nominated">Nomination-round survivors</option>
+                    <option value="manual">Host picks manually</option>
+                  </select>
+                </label>
+                {finaleEntryMode.startsWith("top_n") ? (
+                  <label className="font-bold">How many (N)
+                    <input className="field mt-1" name="entryN" type="number" min="1" max="50" defaultValue={Number(finaleEntry.n ?? 3)} />
+                  </label>
+                ) : null}
+              </fieldset>
+
+              <fieldset className="grid gap-3">
+                <legend className="font-black">How the winner is chosen</legend>
+                <select className="field" name="resolutionMethod" value={finaleMethod} onChange={(e) => setFinaleMethod(e.target.value)}>
+                  <option value="formula">Formula (weighted score)</option>
+                  <option value="box_exchange">Box exchange (final Share / Steal)</option>
+                  <option value="vote">Vote</option>
+                  <option value="other">Other (host adjudicates)</option>
+                </select>
+
+                {finaleMethod === "box_exchange" ? (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <label className="text-xs font-bold">All share %<input className="field mt-1" name="boxAllSharePercent" type="number" min="0" max="100" defaultValue={Number(finaleRes.allSharePercent ?? 100)} /></label>
+                    <label className="text-xs font-bold">One steals %<input className="field mt-1" name="boxSingleStealerPercent" type="number" min="0" max="100" defaultValue={Number(finaleRes.singleStealerPercent ?? 60)} /></label>
+                    <label className="text-xs font-bold">Many steal %<input className="field mt-1" name="boxMultiStealerPercent" type="number" min="0" max="100" defaultValue={Number(finaleRes.multipleStealersPercent ?? 30)} /></label>
+                  </div>
+                ) : null}
+                {finaleMethod === "vote" ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="text-xs font-bold">Electorate
+                      <select className="field mt-1" name="voteElectorate" defaultValue={String(finaleRes.electorate ?? "finalists")}>
+                        <option value="finalists">Finalists</option>
+                        <option value="all_players">All players</option>
+                        <option value="eliminated_jury">Eliminated players (jury)</option>
+                      </select>
+                    </label>
+                    <label className="text-xs font-bold">Tie-break
+                      <select className="field mt-1" name="voteTieBreak" defaultValue={String(finaleRes.tieBreak ?? "most_money")}>
+                        <option value="most_money">Most money</option>
+                        <option value="host_decides">Host decides</option>
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
+                {finaleMethod === "other" ? (
+                  <textarea className="field min-h-20" name="otherDescription" placeholder="Describe the rule you'll use to pick the winner…" defaultValue={String(finaleRes.description ?? "")} />
+                ) : null}
+              </fieldset>
+
+              <button className="pill pill-primary w-fit">Save finale rules</button>
             </form>
-            <a className="pill pill-secondary mt-3 w-full" href={`/api/games/${String(game.id)}/results`}>Export results CSV</a>
+
+            {finaleMethod === "formula" ? (
+              <form action={saveWinnerFormula} className="bubble-card grid gap-3 p-6 sm:grid-cols-2">
+                <input type="hidden" name="locale" value={locale} />
+                <input type="hidden" name="gameId" value={String(game.id)} />
+                <p className="text-sm font-black sm:col-span-2">Formula weights</p>
+                {[
+                  ["moneyWeight", "Money multiplier", "1"],
+                  ["protectedSecretBonus", "Protected secret bonus", "5000"],
+                  ["houseSecretBonus", "House Secret bonus", "5000"],
+                  ["missionBonus", "Per mission bonus", "500"],
+                  ["voteBonus", "Per finale vote", "1000"],
+                ].map(([name, label, value]) => (
+                  <label key={name} className="text-xs font-bold">{label}<input className="field mt-1" name={name} type="number" min="0" step={name === "moneyWeight" ? ".1" : "1"} defaultValue={value} /></label>
+                ))}
+                <button className="pill pill-primary sm:col-span-2">Save winner formula</button>
+              </form>
+            ) : null}
+
+            <a className="pill pill-secondary w-full" href={`/api/games/${String(game.id)}/results`}>Export results CSV</a>
           </div>
         ) : null}
 

@@ -643,3 +643,45 @@ export async function saveWinnerFormula(formData: FormData) {
   if (error) throw new Error(error.message);
   refresh(parsed.locale, parsed.gameId);
 }
+
+// Finale rules (items 5 & 6): who gets into the finale, and how the winner is
+// picked. Stored in games.settings.finale; consumed by the finale flow.
+export async function saveFinaleConfig(formData: FormData) {
+  const parsed = base.extend({
+    entryMode: z.enum(["all_active", "top_n_by_balance", "top_n_by_score", "nominated", "manual"]),
+    entryN: z.coerce.number().int().min(1).max(50).optional().default(3),
+    resolutionMethod: z.enum(["formula", "box_exchange", "vote", "other"]),
+    voteElectorate: z.enum(["finalists", "all_players", "eliminated_jury"]).optional().default("finalists"),
+    voteTieBreak: z.enum(["most_money", "host_decides"]).optional().default("most_money"),
+    boxAllSharePercent: z.coerce.number().int().min(0).max(100).optional().default(100),
+    boxSingleStealerPercent: z.coerce.number().int().min(0).max(100).optional().default(60),
+    boxMultiStealerPercent: z.coerce.number().int().min(0).max(100).optional().default(30),
+    otherDescription: z.string().trim().max(500).optional().default(""),
+  }).parse(Object.fromEntries(formData));
+
+  const finale = {
+    entry: { mode: parsed.entryMode, n: parsed.entryN },
+    resolution:
+      parsed.resolutionMethod === "vote"
+        ? { method: "vote", electorate: parsed.voteElectorate, tieBreak: parsed.voteTieBreak }
+        : parsed.resolutionMethod === "box_exchange"
+          ? {
+              method: "box_exchange",
+              allSharePercent: parsed.boxAllSharePercent,
+              singleStealerPercent: parsed.boxSingleStealerPercent,
+              multipleStealersPercent: parsed.boxMultiStealerPercent,
+            }
+          : parsed.resolutionMethod === "other"
+            ? { method: "other", description: parsed.otherDescription }
+            : { method: "formula" },
+  };
+
+  const supabase = await createClient();
+  const { data: game } = await supabase.from("games").select("settings").eq("id", parsed.gameId).single();
+  const settings = z.record(z.string(), z.unknown()).catch({}).parse(game?.settings);
+  const { error } = await supabase.from("games").update({
+    settings: { ...settings, finale },
+  }).eq("id", parsed.gameId);
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
