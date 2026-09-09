@@ -434,6 +434,7 @@ export const theoryNotes = pgTable("theory_notes", {
   gameId: uuid("game_id").notNull().references(() => games.id, { onDelete: "cascade" }),
   playerId: uuid("player_id").notNull().references(() => gamePlayers.id, { onDelete: "cascade" }),
   targetPlayerId: uuid("target_player_id").references(() => gamePlayers.id),
+  targetHouseSecretId: uuid("target_house_secret_id").references(() => houseSecrets.id, { onDelete: "cascade" }),
   body: text("body").notNull(),
   ...timestamps,
 });

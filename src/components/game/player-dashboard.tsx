@@ -1,8 +1,6 @@
 "use client";
 
 import {
-  Bell,
-  BookOpen,
   Coins,
   Eye,
   EyeOff,
@@ -11,13 +9,14 @@ import {
   LockKeyhole,
   Megaphone,
   ShieldQuestion,
+  UserRound,
   Users,
   X,
   Zap,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { useEffect, useMemo, useState, useActionState } from "react";
+import { useEffect, useMemo, useRef, useState, useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { useTranslations } from "next-intl";
 
@@ -26,8 +25,8 @@ import {
   buyHint,
   createHintOffer,
   setDilemmaChoice,
-  saveTheoryNote,
   savePlayerNote,
+  saveHouseNote,
   shareHint,
   resolveHintOffer,
   revealMySecret,
@@ -48,17 +47,6 @@ type Player = {
   profiles: { display_name?: string | null; avatar_path?: string | null } | null;
 };
 
-type VaultMission = {
-  id: string;
-  title: string;
-  instructions: string;
-  status: string;
-  reward: number;
-  penalty: number;
-  visibility: string;
-  submitted_at: string | null;
-};
-
 type VaultHint = {
   id: string;
   kind: string;
@@ -66,18 +54,39 @@ type VaultHint = {
   position: number;
   about_player_id: string | null;
   about_player_name: string | null;
-  source?: "granted" | "revealed";
 };
 
 type VaultNote = { target_player_id: string | null; body: string; updated_at: string };
-type VaultPlayer = { id: string; name: string | null };
+type VaultAccusation = {
+  target_player_id: string;
+  theory: string;
+  status: string;
+  created_at: string;
+  resolved_at: string | null;
+};
+type VaultPlayer = {
+  id: string;
+  user_id: string | null;
+  name: string | null;
+  avatar_path: string | null;
+  secret_revealed: boolean;
+  secret_text: string | null;
+  hint_count: number;
+};
+type VaultHouse = {
+  id: string;
+  revealed: boolean;
+  answer: string | null;
+  note: string | null;
+} | null;
 
 type VaultData = {
   secret: { has: boolean; status: string | null };
-  missions: VaultMission[];
   hints: VaultHint[];
   notes: VaultNote[];
+  accusations: VaultAccusation[];
   players: VaultPlayer[];
+  house: VaultHouse;
 };
 
 type Props = {
@@ -91,6 +100,7 @@ type Props = {
     settings: unknown;
   };
   playerId: string;
+  currentUserId: string;
   players: Player[];
   round: { id: string; title: string; kind: string; status: string; config: unknown; ends_at: string | null } | null;
   balance: number;
@@ -111,11 +121,19 @@ export function PlayerDashboard(props: Props) {
   const [secretState, submitSecretAction] = useActionState(submitSecret, { success: false, error: null });
   const [buzzState, buzzFormAction] = useActionState(accusationBuzz, { success: false, error: null });
   const [hintState, hintFormAction] = useActionState(buyHint, { success: false, error: null });
-  const targets = useMemo(() => props.players.filter((player) => player.id !== props.playerId), [props.players, props.playerId]);
+  const targets = useMemo(
+    () => props.players.filter((player) => player.id !== props.playerId),
+    [props.players, props.playerId],
+  );
 
   const vault = (props.vault ?? null) as unknown as VaultData | null;
+  const me = useMemo(
+    () => props.players.find((player) => player.id === props.playerId) ?? null,
+    [props.players, props.playerId],
+  );
 
   const [vaultOpen, setVaultOpen] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
   const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
   const [revealArmed, setRevealArmed] = useState(false);
   const [revealing, setRevealing] = useState(false);
@@ -124,27 +142,22 @@ export function PlayerDashboard(props: Props) {
   const secretStatus = vault?.secret?.status ?? null;
   const submissionOpen = props.game.status === "draft" || props.game.status === "secret_submission";
   const gameEnded = props.game.status === "completed" || props.game.status === "archived";
-  // Show the secret entry point whenever the player can still act on it: they
-  // have no secret yet (covers players invited after submission closed), or the
-  // draft window is still open for edits.
   const canSetSecret = !gameEnded && (!hasSecret || (submissionOpen && secretStatus === "draft"));
 
   const hintsByPlayer = useMemo(() => {
-    const groups = new Map<string, { id: string; name: string; hints: VaultHint[] }>();
-    for (const hint of ((props.vault ?? null) as unknown as VaultData | null)?.hints ?? []) {
+    const groups = new Map<string, VaultHint[]>();
+    for (const hint of vault?.hints ?? []) {
       const id = hint.about_player_id ?? "unknown";
-      if (!groups.has(id)) {
-        groups.set(id, { id, name: hint.about_player_name ?? "Unknown player", hints: [] });
-      }
-      groups.get(id)!.hints.push(hint);
+      if (!groups.has(id)) groups.set(id, []);
+      groups.get(id)!.push(hint);
     }
-    return [...groups.values()];
-  }, [props.vault]);
+    return groups;
+  }, [vault]);
+
+  const houseClues = (props.houseSecret?.clues as Array<Record<string, unknown>> | undefined) ?? [];
 
   useEffect(() => {
-    // Close the open modal once its server action reports success. This is the
-    // supported way to react to a useActionState result; it runs once per
-    // settled submission, not on every render.
+    // Close the open modal once its server action reports success.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (secretState.success || buzzState.success || hintState.success) setModal(null);
   }, [secretState, buzzState, hintState]);
@@ -152,10 +165,6 @@ export function PlayerDashboard(props: Props) {
   useEffect(() => {
     const supabase = createClient();
     let last = 0;
-    // display_cues is the single "something changed, re-fetch" signal for this
-    // game. A DB trigger inserts one on every round / wallet / event change and
-    // on every accusation buzz created or resolved, so the whole table refreshes
-    // in lock-step with the TV dashboard.
     const channel = supabase
       .channel(`game-refresh:${props.game.id}`)
       .on(
@@ -163,7 +172,7 @@ export function PlayerDashboard(props: Props) {
         { event: "INSERT", schema: "public", table: "display_cues", filter: `game_id=eq.${props.game.id}` },
         () => {
           const ts = Date.now();
-          if (ts - last < 300) return; // collapse trigger bursts
+          if (ts - last < 300) return;
           last = ts;
           router.refresh();
         },
@@ -200,54 +209,541 @@ export function PlayerDashboard(props: Props) {
   const team = props.teamMember?.teams as Record<string, unknown> | undefined;
   const isTeamRound = props.round?.kind === "team";
   const modalError = modal === "accuse" ? buzzState.error : modal === "hint" ? hintState.error : null;
+  const showBallot = Boolean(props.round && ["nomination", "finale", "elimination"].includes(props.round.kind));
+  const hasMyGame =
+    canSetSecret ||
+    hasSecret ||
+    showBallot ||
+    props.activeBuzzes.length > 0 ||
+    Boolean(mission) ||
+    isTeamRound ||
+    props.hints.length > 0 ||
+    props.hintOffers.length > 0;
+
+  const selectedPlayer =
+    selected && selected !== "house"
+      ? vault?.players.find((player) => player.id === selected) ?? null
+      : null;
+  const houseOpen = selected === "house";
+  const selectedHints = selectedPlayer ? hintsByPlayer.get(selectedPlayer.id) ?? [] : [];
+  const selectedAccusations = selectedPlayer
+    ? (vault?.accusations ?? []).filter((a) => a.target_player_id === selectedPlayer.id)
+    : [];
 
   return (
     <section className="mx-auto max-w-3xl pb-24">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="font-mono text-sm font-black tracking-widest text-pink-600">#{props.game.public_code}</p>
-          <h1 className="display text-4xl font-black">{props.game.title}</h1>
-        </div>
-        <span className="rounded-full bg-white px-3 py-2 text-xs font-black uppercase shadow-sm">{props.game.status.replaceAll("_", " ")}</span>
-      </div>
-
-      <div className="mt-6 grid grid-cols-2 gap-3">
-        <article className="bubble-card bg-gradient-to-br from-pink-500 to-fuchsia-700 p-5 text-white">
-          <Coins size={20} />
-          <p className="mt-5 text-sm font-bold">{t("wallet")}</p>
-          <p className="display text-3xl font-black">{formatMoney(props.balance, props.game.currency_symbol)}</p>
-        </article>
-        <article className="bubble-card p-5">
-          <Lightbulb className="text-amber-500" size={20} />
-          <p className="mt-5 text-sm font-bold">{t("hints")}</p>
-          <p className="display text-3xl font-black">{props.hints.length}</p>
-        </article>
-      </div>
-
-      <article className="bubble-card mt-4 overflow-hidden">
-        <div className="bg-gradient-to-r from-violet-600 to-pink-500 p-5 text-white">
-          <p className="text-xs font-black uppercase tracking-[.18em]">Current round</p>
-          <h2 className="display mt-1 text-3xl font-black">{props.round?.title ?? t("waiting")}</h2>
-        </div>
-        <div className="grid grid-cols-2 gap-3 p-4">
-          <button onClick={() => setModal("accuse")} className="min-h-28 rounded-3xl bg-red-500 p-4 text-left font-black text-white shadow-lg shadow-red-200">
-            <Megaphone className="mb-4" /> {t("accuse")}
-          </button>
-          <button onClick={() => setModal("hint")} className="min-h-28 rounded-3xl bg-amber-300 p-4 text-left font-black text-amber-950 shadow-lg shadow-amber-100">
-            <Lightbulb className="mb-4" /> {t("buyHint")}
-          </button>
+      {/* 1. Player profile */}
+      <article className="bubble-card flex items-center gap-4 p-4">
+        <Avatar userId={props.currentUserId} name={me?.profiles?.display_name ?? null} size={64} />
+        <div className="min-w-0">
+          <h1 className="display truncate text-2xl font-black">{me?.profiles?.display_name ?? "You"}</h1>
+          <p className="font-mono text-xs font-black tracking-widest text-pink-600">
+            #{props.game.public_code} · {props.game.status.replaceAll("_", " ")}
+          </p>
         </div>
       </article>
 
+      {/* 2. Money */}
+      <article className="bubble-card mt-4 bg-gradient-to-br from-pink-500 to-fuchsia-700 p-5 text-white">
+        <Coins size={20} />
+        <p className="mt-4 text-sm font-bold">{t("wallet")}</p>
+        <p className="display text-4xl font-black">{formatMoney(props.balance, props.game.currency_symbol)}</p>
+      </article>
+
+      {/* 3. Buzz buttons */}
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <button
+          onClick={() => setModal("accuse")}
+          className="min-h-28 rounded-3xl bg-red-500 p-4 text-left font-black text-white shadow-lg shadow-red-200"
+        >
+          <Megaphone className="mb-4" /> {t("accuse")}
+        </button>
+        <button
+          onClick={() => setModal("hint")}
+          className="min-h-28 rounded-3xl bg-amber-300 p-4 text-left font-black text-amber-950 shadow-lg shadow-amber-100"
+        >
+          <Lightbulb className="mb-4" /> {t("buyHint")}
+        </button>
+      </div>
+
+      {/* 4. Vault */}
+      <article className="bubble-card mt-4 p-5">
+        <button
+          type="button"
+          onClick={() => setVaultOpen((open) => !open)}
+          className="flex w-full items-center justify-between gap-2 font-black"
+        >
+          <span className="flex items-center gap-2 text-lg"><Lock className="text-violet-600" /> Vault</span>
+          <span className="text-xs font-bold text-[var(--muted)]">{vaultOpen ? "Close" : "Open"}</span>
+        </button>
+
+        {vaultOpen ? (
+          <div className="mt-5 space-y-6">
+            {hasMyGame ? (
+              <MyGame
+                {...props}
+                hasSecret={hasSecret}
+                canSetSecret={canSetSecret}
+                showBallot={showBallot}
+                mission={mission}
+                team={team}
+                isTeamRound={isTeamRound}
+                targets={targets}
+                revealedSecret={revealedSecret}
+                revealArmed={revealArmed}
+                revealing={revealing}
+                onReveal={handleReveal}
+                onHideSecret={hideSecret}
+                onEditSecret={() => setModal("secret")}
+                onDisarm={() => setRevealArmed(false)}
+              />
+            ) : null}
+
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Everyone&apos;s secrets</p>
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {(vault?.players ?? []).map((player) => {
+                  const count = player.hint_count || (hintsByPlayer.get(player.id)?.length ?? 0);
+                  return (
+                    <button
+                      key={player.id}
+                      type="button"
+                      onClick={() => setSelected(player.id)}
+                      className="flex flex-col items-center gap-2 rounded-3xl bg-white p-3 text-center shadow-sm"
+                    >
+                      <Avatar userId={player.user_id} name={player.name} size={56} />
+                      <p className="w-full truncate text-sm font-black">{player.name ?? "Player"}</p>
+                      <div className="flex flex-wrap justify-center gap-1">
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-900">
+                          {count} hint{count === 1 ? "" : "s"}
+                        </span>
+                        {player.secret_revealed ? (
+                          <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black text-white">SECRET OUT</span>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {vault?.house || props.houseSecret ? (
+                  <button
+                    type="button"
+                    onClick={() => setSelected("house")}
+                    className="flex flex-col items-center gap-2 rounded-3xl bg-white p-3 text-center shadow-sm"
+                  >
+                    <span className="grid size-14 shrink-0 place-items-center rounded-full bg-violet-100 text-violet-600">
+                      <ShieldQuestion size={28} />
+                    </span>
+                    <p className="w-full truncate text-sm font-black">{t("houseSecret")}</p>
+                    <div className="flex flex-wrap justify-center gap-1">
+                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-black text-violet-900">
+                        {houseClues.length} clue{houseClues.length === 1 ? "" : "s"}
+                      </span>
+                      {vault?.house?.revealed ? (
+                        <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black text-white">REVEALED</span>
+                      ) : null}
+                    </div>
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </article>
+
+      {/* Roster detail sheet — player */}
+      {selectedPlayer ? (
+        <DetailSheet title={selectedPlayer.name ?? "Player"} onClose={() => setSelected(null)}>
+          <div className="mt-4 space-y-5">
+            {selectedPlayer.secret_revealed && selectedPlayer.secret_text ? (
+              <div className="rounded-2xl bg-red-50 p-4">
+                <p className="text-xs font-black uppercase tracking-widest text-red-600">Secret revealed</p>
+                <p className="mt-2 text-lg font-bold break-words">{selectedPlayer.secret_text}</p>
+              </div>
+            ) : null}
+
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Hints you hold</p>
+              {selectedHints.length ? (
+                <ul className="mt-3 space-y-2">
+                  {selectedHints.map((hint) => (
+                    <li key={hint.id} className="rounded-2xl bg-amber-50 p-3 text-sm">
+                      {hint.kind === "image" ? (
+                        <Image
+                          className="h-auto w-full rounded-xl"
+                          src={`/api/assets/hints/${hint.id}`}
+                          alt="Hint"
+                          width={800}
+                          height={500}
+                          unoptimized
+                        />
+                      ) : (
+                        hint.text
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-sm text-[var(--muted)]">No hints on this player yet.</p>
+              )}
+            </div>
+
+            {selectedAccusations.length ? (
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Your accusations</p>
+                <ul className="mt-3 space-y-2">
+                  {selectedAccusations.map((a, index) => (
+                    <li key={index} className="rounded-2xl bg-pink-50 p-3 text-sm">
+                      <span className="font-bold">“{a.theory}”</span>
+                      <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-[10px] font-black uppercase">{a.status}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Your comments</p>
+              <NoteField
+                action={savePlayerNote}
+                hidden={{
+                  locale: props.locale,
+                  gameId: props.game.id,
+                  playerId: props.playerId,
+                  targetPlayerId: selectedPlayer.id,
+                }}
+                initial={vault?.notes.find((note) => note.target_player_id === selectedPlayer.id)?.body ?? ""}
+                placeholder={`What is ${selectedPlayer.name ?? "this player"} hiding?`}
+              />
+            </div>
+          </div>
+        </DetailSheet>
+      ) : null}
+
+      {/* Roster detail sheet — house */}
+      {houseOpen ? (
+        <DetailSheet title={t("houseSecret")} onClose={() => setSelected(null)}>
+          <div className="mt-4 space-y-5">
+            {vault?.house?.revealed && vault.house.answer ? (
+              <div className="rounded-2xl bg-red-50 p-4">
+                <p className="text-xs font-black uppercase tracking-widest text-red-600">Answer revealed</p>
+                <p className="mt-2 text-lg font-bold break-words">{vault.house.answer}</p>
+              </div>
+            ) : null}
+
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Fragments</p>
+              {houseClues.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {houseClues.map((clue) => (
+                    <span key={String(clue.id)} className="rounded-full bg-violet-100 px-3 py-2 text-sm font-bold">
+                      {String(clue.text ?? "Image clue")}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-[var(--muted)]">No fragments released yet.</p>
+              )}
+            </div>
+
+            {props.houseSecret ? (
+              <form action={submitHouseTheory} className="space-y-2">
+                <input type="hidden" name="locale" value={props.locale} />
+                <input type="hidden" name="gameId" value={props.game.id} />
+                <input type="hidden" name="houseSecretId" value={String(props.houseSecret.id)} />
+                <input type="hidden" name="playerId" value={props.playerId} />
+                <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Submit a theory</p>
+                <textarea className="field min-h-24" name="theory" required placeholder="My House Secret theory…" />
+                <button className="pill pill-secondary w-full">Submit theory</button>
+              </form>
+            ) : null}
+
+            {vault?.house ? (
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Your comments</p>
+                <NoteField
+                  action={saveHouseNote}
+                  hidden={{
+                    locale: props.locale,
+                    gameId: props.game.id,
+                    playerId: props.playerId,
+                    houseSecretId: vault.house.id,
+                  }}
+                  initial={vault.house.note ?? ""}
+                  placeholder="What is the House hiding?"
+                />
+              </div>
+            ) : null}
+          </div>
+        </DetailSheet>
+      ) : null}
+
+      {/* Buzz / secret modals */}
+      {modal ? (
+        <div className="fixed inset-0 z-50 grid items-end bg-[rgba(50,10,40,.45)] p-3 backdrop-blur-sm sm:place-items-center" role="dialog" aria-modal="true">
+          <div className="bubble-card safe-bottom w-full max-w-lg p-5">
+            <div className="flex items-center justify-between">
+              <h2 className="display text-3xl font-black">
+                {modal === "accuse" ? t("accuse") : modal === "hint" ? t("buyHint") : "My secret"}
+              </h2>
+              <button onClick={() => setModal(null)} className="grid size-11 place-items-center rounded-full bg-pink-50"><X /></button>
+            </div>
+            {modal === "secret" ? (
+              <form action={submitSecretAction} className="mt-5 space-y-4">
+                <input type="hidden" name="locale" value={props.locale} />
+                <input type="hidden" name="gameId" value={props.game.id} />
+                <input type="hidden" name="playerId" value={props.playerId} />
+                <textarea name="value" className="field min-h-32" maxLength={500} required placeholder="I once…" />
+                <p className="text-xs text-[var(--muted)]">Only you and game admins can see this before it is revealed.</p>
+                {secretState.error ? (
+                  <p role="alert" className="text-sm font-semibold text-red-600">{secretState.error}</p>
+                ) : null}
+                <SaveSecretButton />
+              </form>
+            ) : (
+              <form action={modal === "accuse" ? buzzFormAction : hintFormAction} className="mt-5 space-y-4">
+                <input type="hidden" name="locale" value={props.locale} />
+                <input type="hidden" name="gameId" value={props.game.id} />
+                <select className="field" name="targetPlayerId" required defaultValue="">
+                  <option value="" disabled>Select a player</option>
+                  {targets.map((player) => <option key={player.id} value={player.id}>{player.profiles?.display_name ?? "Player"}</option>)}
+                </select>
+                {modal === "accuse" ? <textarea className="field min-h-28" name="theory" required placeholder="Their exact secret is…" /> : null}
+                {modalError ? (
+                  <p role="alert" className="text-sm font-semibold text-red-600">{modalError}</p>
+                ) : null}
+                <button className={`pill w-full ${modal === "accuse" ? "bg-red-500 text-white" : "bg-amber-300 text-amber-950"}`}>
+                  {modal === "accuse" ? <Megaphone size={18} /> : <Lightbulb size={18} />}
+                  Confirm buzz
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function Avatar({ userId, name, size }: { userId: string | null; name: string | null; size: number }) {
+  const [failed, setFailed] = useState(false);
+  const dimension = { width: `${size}px`, height: `${size}px` };
+  if (!userId || failed) {
+    return (
+      <span style={dimension} className="grid shrink-0 place-items-center rounded-full bg-pink-100 text-pink-500">
+        <UserRound size={Math.round(size * 0.55)} />
+      </span>
+    );
+  }
+  return (
+    <span style={dimension} className="relative block shrink-0 overflow-hidden rounded-full bg-pink-100">
+      <Image
+        src={`/api/assets/avatar/${userId}`}
+        alt={name ?? ""}
+        fill
+        sizes={`${size}px`}
+        unoptimized
+        className="object-cover"
+        onError={() => setFailed(true)}
+      />
+    </span>
+  );
+}
+
+function DetailSheet({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 grid items-end bg-[rgba(50,10,40,.45)] p-3 backdrop-blur-sm sm:place-items-center"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="bubble-card safe-bottom max-h-[85vh] w-full max-w-lg overflow-y-auto p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="display text-2xl font-black">{title}</h2>
+          <button onClick={onClose} className="grid size-11 place-items-center rounded-full bg-pink-50"><X /></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function NoteField({
+  action,
+  hidden,
+  initial,
+  placeholder,
+}: {
+  action: (formData: FormData) => void | Promise<void>;
+  hidden: Record<string, string>;
+  initial: string;
+  placeholder: string;
+}) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dirty = useRef(false);
+  const [value, setValue] = useState(initial);
+
+  function flush() {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    if (dirty.current) {
+      dirty.current = false;
+      formRef.current?.requestSubmit();
+    }
+  }
+
+  useEffect(() => {
+    return () => flush();
+  }, []);
+
+  return (
+    <form ref={formRef} action={action} className="mt-3">
+      {Object.entries(hidden).map(([key, val]) => (
+        <input key={key} type="hidden" name={key} value={val} />
+      ))}
+      <textarea
+        name="body"
+        value={value}
+        onChange={(event) => {
+          setValue(event.target.value);
+          dirty.current = true;
+          if (timer.current) clearTimeout(timer.current);
+          timer.current = setTimeout(flush, 800);
+        }}
+        onBlur={flush}
+        className="field min-h-24 w-full"
+        maxLength={3000}
+        placeholder={placeholder}
+      />
+      <SaveHint />
+    </form>
+  );
+}
+
+function SaveHint() {
+  const { pending } = useFormStatus();
+  return <p className="mt-1 text-xs font-bold text-[var(--muted)]">{pending ? "Saving…" : "Saves automatically"}</p>;
+}
+
+type MyGameProps = Props & {
+  hasSecret: boolean;
+  canSetSecret: boolean;
+  showBallot: boolean;
+  mission: Record<string, unknown> | undefined;
+  team: Record<string, unknown> | undefined;
+  isTeamRound: boolean;
+  targets: Player[];
+  revealedSecret: string | null;
+  revealArmed: boolean;
+  revealing: boolean;
+  onReveal: () => void;
+  onHideSecret: () => void;
+  onEditSecret: () => void;
+  onDisarm: () => void;
+};
+
+function MyGame(props: MyGameProps) {
+  const t = useTranslations("play");
+  const {
+    hasSecret,
+    canSetSecret,
+    showBallot,
+    mission,
+    team,
+    isTeamRound,
+    targets,
+    revealedSecret,
+    revealArmed,
+    revealing,
+  } = props;
+
+  return (
+    <div className="space-y-5">
+      <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">My game</p>
+
+      {/* My secret */}
+      <div className="rounded-2xl bg-violet-50 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-black uppercase tracking-widest text-violet-700">My secret</p>
+          {canSetSecret ? (
+            <button type="button" onClick={props.onEditSecret} className="pill pill-secondary text-xs">
+              <LockKeyhole size={14} /> {hasSecret ? "Edit" : "Set"}
+            </button>
+          ) : null}
+        </div>
+        {!hasSecret ? (
+          <p className="mt-2 text-sm text-[var(--muted)]">You haven&apos;t set a secret yet.</p>
+        ) : revealedSecret !== null ? (
+          <>
+            <p className="mt-2 text-lg font-bold break-words">{revealedSecret}</p>
+            <button type="button" onClick={props.onHideSecret} className="pill pill-secondary mt-3">
+              <EyeOff size={16} /> Hide
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="mt-2 select-none text-lg font-black tracking-[.3em] text-violet-300">••••••••</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={props.onReveal}
+                disabled={revealing}
+                className={`pill ${revealArmed ? "bg-red-500 text-white" : "pill-secondary"} disabled:opacity-60`}
+              >
+                <Eye size={16} />
+                {revealing ? "Opening…" : revealArmed ? "Tap again to reveal" : "Reveal my secret"}
+              </button>
+              {revealArmed ? (
+                <button type="button" onClick={props.onDisarm} className="pill pill-secondary">
+                  Cancel
+                </button>
+              ) : null}
+            </div>
+            <p className="mt-2 text-xs text-[var(--muted)]">Kept hidden until you tap twice, so a glance at your screen won&apos;t give it away.</p>
+          </>
+        )}
+      </div>
+
+      {/* Secret ballot */}
+      {showBallot && props.round ? (
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-2 font-black"><Users className="text-pink-600" /> Secret ballot</div>
+          <form action={castVote} className="mt-3 space-y-2">
+            <input type="hidden" name="locale" value={props.locale} />
+            <input type="hidden" name="gameId" value={props.game.id} />
+            <input type="hidden" name="roundId" value={props.round.id} />
+            <input type="hidden" name="voterPlayerId" value={props.playerId} />
+            <input type="hidden" name="kind" value={props.round.kind === "finale" ? "finale" : "nominate"} />
+            <select className="field" name="targetPlayerId" required defaultValue="">
+              <option value="" disabled>Choose privately</option>
+              {targets.map((player) => <option key={player.id} value={player.id}>{player.profiles?.display_name ?? "Player"}</option>)}
+            </select>
+            <button className="pill pill-primary w-full">Lock my vote</button>
+          </form>
+        </div>
+      ) : null}
+
+      {/* Accusations I raised */}
       {props.activeBuzzes.map((buzz) => {
         const target = buzz.target as Record<string, unknown> | undefined;
         const profile = target?.profiles as Record<string, unknown> | undefined;
         return (
-          <article key={String(buzz.id)} className="bubble-card mt-4 border-red-200 p-5">
+          <div key={String(buzz.id)} className="rounded-2xl border border-red-200 bg-white p-4">
             <p className="text-xs font-black uppercase tracking-widest text-red-600">Active accusation · {String(buzz.status)}</p>
-            <h3 className="display mt-2 text-2xl font-black">{String(profile?.display_name ?? "Player")}: “{String(buzz.theory)}”</h3>
+            <h3 className="display mt-2 text-xl font-black">{String(profile?.display_name ?? "Player")}: “{String(buzz.theory)}”</h3>
             {buzz.status !== "confirmed" ? (
-              <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="mt-3 grid grid-cols-2 gap-2">
                 {buzz.status === "confrontation" ? (
                   <form action={stageAccusationBuzz}>
                     <input type="hidden" name="locale" value={props.locale} />
@@ -266,80 +762,55 @@ export function PlayerDashboard(props: Props) {
                 </form>
               </div>
             ) : null}
-          </article>
+          </div>
         );
       })}
 
-      {canSetSecret ? (
-        <button onClick={() => setModal("secret")} className="pill pill-secondary mt-4 w-full">
-          <LockKeyhole size={19} /> {hasSecret ? "Edit my secret" : "Set my private secret"}
-        </button>
-      ) : null}
-
-      {props.round && ["nomination", "finale", "elimination"].includes(props.round.kind) ? (
-        <article className="bubble-card mt-4 p-5">
-          <div className="flex items-center gap-2 font-black"><Users className="text-pink-600" /> Secret ballot</div>
-          <form action={castVote} className="mt-4 space-y-2">
+      {/* Mission */}
+      {mission ? (
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-2 font-black"><Zap className="text-pink-600" /> {t("mission")}</div>
+          <h3 className="display mt-3 text-xl font-black">{String(mission.title)}</h3>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{String(mission.instructions)}</p>
+          <form action={submitMission} className="mt-3">
             <input type="hidden" name="locale" value={props.locale} />
             <input type="hidden" name="gameId" value={props.game.id} />
-            <input type="hidden" name="roundId" value={props.round.id} />
-            <input type="hidden" name="voterPlayerId" value={props.playerId} />
-            <input type="hidden" name="kind" value={props.round.kind === "finale" ? "finale" : "nominate"} />
-            <select className="field" name="targetPlayerId" required defaultValue="">
-              <option value="" disabled>Choose privately</option>
-              {targets.map((player) => <option key={player.id} value={player.id}>{player.profiles?.display_name ?? "Player"}</option>)}
-            </select>
-            <button className="pill pill-primary w-full">Lock my vote</button>
+            <input type="hidden" name="missionId" value={String(mission.id)} />
+            <input type="hidden" name="playerId" value={props.playerId} />
+            <button className="pill pill-primary w-full">Mark complete</button>
           </form>
-        </article>
+        </div>
       ) : null}
 
-      {mission || isTeamRound ? (
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          {mission ? (
-            <article className="bubble-card p-5">
-              <div className="flex items-center gap-2 font-black"><Zap className="text-pink-600" /> {t("mission")}</div>
-              <h3 className="display mt-4 text-2xl font-black">{String(mission.title)}</h3>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{String(mission.instructions)}</p>
-              <form action={submitMission} className="mt-4">
-                <input type="hidden" name="locale" value={props.locale} />
-                <input type="hidden" name="gameId" value={props.game.id} />
-                <input type="hidden" name="missionId" value={String(mission.id)} />
-                <input type="hidden" name="playerId" value={props.playerId} />
-                <button className="pill pill-primary w-full">Mark complete</button>
-              </form>
-            </article>
-          ) : null}
-
-          {isTeamRound ? (
-            <article className="bubble-card p-5">
-              <div className="flex items-center gap-2 font-black"><Users className="text-violet-600" /> {t("team")}</div>
-              <h3 className="display mt-4 text-2xl font-black">{team ? String(team.name) : "Not assigned yet"}</h3>
-              {team && !props.teamMember?.dilemma_choice ? (
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  {(["share", "steal"] as const).map((choice) => (
-                    <form action={setDilemmaChoice} key={choice}>
-                      <input type="hidden" name="locale" value={props.locale} />
-                      <input type="hidden" name="gameId" value={props.game.id} />
-                      <input type="hidden" name="teamId" value={String(props.teamMember?.team_id)} />
-                      <input type="hidden" name="playerId" value={props.playerId} />
-                      <input type="hidden" name="choice" value={choice} />
-                      <button className={`pill w-full ${choice === "share" ? "pill-secondary" : "pill-primary"}`}>
-                        {t(choice)}
-                      </button>
-                    </form>
-                  ))}
-                </div>
-              ) : null}
-            </article>
+      {/* Team */}
+      {isTeamRound ? (
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-2 font-black"><Users className="text-violet-600" /> {t("team")}</div>
+          <h3 className="display mt-3 text-xl font-black">{team ? String(team.name) : "Not assigned yet"}</h3>
+          {team && !props.teamMember?.dilemma_choice ? (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {(["share", "steal"] as const).map((choice) => (
+                <form action={setDilemmaChoice} key={choice}>
+                  <input type="hidden" name="locale" value={props.locale} />
+                  <input type="hidden" name="gameId" value={props.game.id} />
+                  <input type="hidden" name="teamId" value={String(props.teamMember?.team_id)} />
+                  <input type="hidden" name="playerId" value={props.playerId} />
+                  <input type="hidden" name="choice" value={choice} />
+                  <button className={`pill w-full ${choice === "share" ? "pill-secondary" : "pill-primary"}`}>
+                    {t(choice)}
+                  </button>
+                </form>
+              ))}
+            </div>
           ) : null}
         </div>
       ) : null}
 
+      {/* My hint inventory */}
       {props.hints.length ? (
-        <article className="bubble-card mt-4 p-5">
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
           <div className="flex items-center gap-2 font-black"><Lightbulb className="text-amber-500" /> {t("hints")}</div>
-          <div className="mt-4 space-y-3">
+          <div className="mt-3 space-y-3">
             {props.hints.map((grant) => {
               const hint = grant.hints as Record<string, unknown> | undefined;
               return (
@@ -384,11 +855,12 @@ export function PlayerDashboard(props: Props) {
               );
             })}
           </div>
-        </article>
+        </div>
       ) : null}
 
+      {/* Hint offers to me */}
       {props.hintOffers.length ? (
-        <article className="bubble-card mt-4 p-5">
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
           <div className="flex items-center gap-2 font-black"><Coins className="text-pink-600" /> Hint offers</div>
           <div className="mt-3 space-y-2">
             {props.hintOffers.map((offer) => {
@@ -413,228 +885,9 @@ export function PlayerDashboard(props: Props) {
               );
             })}
           </div>
-        </article>
-      ) : null}
-
-      <article className="bubble-card mt-4 p-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 font-black"><BookOpen className="text-pink-600" /> {t("notes")}</div>
-          <span className="text-xs font-bold text-[var(--muted)]">{props.notes.length} notes</span>
-        </div>
-        <form action={saveTheoryNote} className="mt-4 space-y-2">
-          <input type="hidden" name="locale" value={props.locale} />
-          <input type="hidden" name="gameId" value={props.game.id} />
-          <input type="hidden" name="playerId" value={props.playerId} />
-          <textarea className="field min-h-28" name="body" required placeholder="What are your friends hiding?" />
-          <button className="pill pill-secondary w-full">Save private note</button>
-        </form>
-      </article>
-
-      {vault ? (
-        <article className="bubble-card mt-4 p-5">
-          <button
-            type="button"
-            onClick={() => setVaultOpen((open) => !open)}
-            className="flex w-full items-center justify-between gap-2 font-black"
-          >
-            <span className="flex items-center gap-2"><Lock className="text-violet-600" /> Vault</span>
-            <span className="text-xs font-bold text-[var(--muted)]">{vaultOpen ? "Close" : "Open"}</span>
-          </button>
-
-          {vaultOpen ? (
-            <div className="mt-4 space-y-6">
-              <div className="rounded-2xl bg-violet-50 p-4">
-                <p className="text-xs font-black uppercase tracking-widest text-violet-700">My secret</p>
-                {!hasSecret ? (
-                  <p className="mt-2 text-sm text-[var(--muted)]">You haven&apos;t set a secret yet.</p>
-                ) : revealedSecret !== null ? (
-                  <>
-                    <p className="mt-2 text-lg font-bold break-words">{revealedSecret}</p>
-                    <button type="button" onClick={hideSecret} className="pill pill-secondary mt-3">
-                      <EyeOff size={16} /> Hide
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="mt-2 select-none text-lg font-black tracking-[.3em] text-violet-300">••••••••</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={handleReveal}
-                        disabled={revealing}
-                        className={`pill ${revealArmed ? "bg-red-500 text-white" : "pill-secondary"} disabled:opacity-60`}
-                      >
-                        <Eye size={16} />
-                        {revealing ? "Opening…" : revealArmed ? "Tap again to reveal" : "Reveal my secret"}
-                      </button>
-                      {revealArmed ? (
-                        <button type="button" onClick={() => setRevealArmed(false)} className="pill pill-secondary">
-                          Cancel
-                        </button>
-                      ) : null}
-                    </div>
-                    <p className="mt-2 text-xs text-[var(--muted)]">Kept hidden until you tap twice, so a glance at your screen won&apos;t give it away.</p>
-                  </>
-                )}
-              </div>
-
-              {vault.missions.length ? (
-                <div>
-                  <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">My missions</p>
-                  <div className="mt-3 space-y-3">
-                    {vault.missions.map((item) => (
-                      <div key={item.id} className="rounded-2xl bg-pink-50 p-4">
-                        <div className="flex items-center justify-between gap-2">
-                          <h4 className="font-black">{item.title}</h4>
-                          <span className="rounded-full bg-white px-2 py-1 text-[10px] font-black uppercase">{item.submitted_at ? "submitted" : item.status}</span>
-                        </div>
-                        <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{item.instructions}</p>
-                        <p className="mt-2 text-xs font-bold text-[var(--muted)]">
-                          Reward {formatMoney(item.reward, props.game.currency_symbol)} · Penalty {formatMoney(item.penalty, props.game.currency_symbol)}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              {hintsByPlayer.length ? (
-                <div>
-                  <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Hints by player</p>
-                  <div className="mt-3 space-y-3">
-                    {hintsByPlayer.map((group) => {
-                      const anyRevealed = group.hints.some((hint) => hint.source === "revealed");
-                      return (
-                        <div key={group.id} className={`rounded-2xl p-4 ${anyRevealed ? "bg-violet-50 ring-1 ring-violet-200" : "bg-amber-50"}`}>
-                          <p className="flex items-center gap-2 font-black">
-                            {group.name}
-                            {anyRevealed ? (
-                              <span className="rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-white">
-                                Secret out
-                              </span>
-                            ) : null}
-                          </p>
-                          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-                            {group.hints.map((hint) => (
-                              <li key={hint.id}>{hint.kind === "image" ? "Image hint — open the Hints panel to view" : hint.text}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-
-              {vault.players.length ? (
-                <div>
-                  <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Notes on players</p>
-                  <div className="mt-3 space-y-3">
-                    {vault.players.map((player) => {
-                      const existing = vault.notes.find((note) => note.target_player_id === player.id);
-                      return (
-                        <form
-                          key={`${player.id}:${existing?.updated_at ?? "new"}`}
-                          action={savePlayerNote}
-                          className="rounded-2xl bg-white p-4 shadow-sm"
-                        >
-                          <input type="hidden" name="locale" value={props.locale} />
-                          <input type="hidden" name="gameId" value={props.game.id} />
-                          <input type="hidden" name="playerId" value={props.playerId} />
-                          <input type="hidden" name="targetPlayerId" value={player.id} />
-                          <p className="font-bold">{player.name ?? "Player"}</p>
-                          <textarea
-                            name="body"
-                            defaultValue={existing?.body ?? ""}
-                            className="field mt-2 min-h-20"
-                            maxLength={3000}
-                            placeholder={`What is ${player.name ?? "this player"} hiding?`}
-                          />
-                          <button className="pill pill-secondary mt-2 w-full">Save note</button>
-                        </form>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </article>
-      ) : null}
-
-      <article className="bubble-card mt-4 p-5">
-        <div className="flex items-center gap-2 font-black"><ShieldQuestion className="text-violet-600" /> {t("houseSecret")}</div>
-        <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-          {props.houseSecret
-            ? `${String(props.houseSecret.mode)} · Vault ${formatMoney(Number(props.houseSecret.vault ?? 0), props.game.currency_symbol)}`
-            : "Collect fragments across rounds and submit your theory when the board opens."}
-        </p>
-        {props.houseSecret ? (
-          <>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {((props.houseSecret.clues as Array<Record<string, unknown>> | undefined) ?? []).map((clue) => (
-                <span key={String(clue.id)} className="rounded-full bg-violet-100 px-3 py-2 text-sm font-bold">{String(clue.text ?? "Image clue")}</span>
-              ))}
-            </div>
-            <form action={submitHouseTheory} className="mt-4 space-y-2">
-              <input type="hidden" name="locale" value={props.locale} />
-              <input type="hidden" name="gameId" value={props.game.id} />
-              <input type="hidden" name="houseSecretId" value={String(props.houseSecret.id)} />
-              <input type="hidden" name="playerId" value={props.playerId} />
-              <textarea className="field min-h-24" name="theory" required placeholder="My House Secret theory…" />
-              <button className="pill pill-secondary w-full">Submit theory</button>
-            </form>
-          </>
-        ) : null}
-      </article>
-
-      {modal ? (
-        <div className="fixed inset-0 z-50 grid items-end bg-[rgba(50,10,40,.45)] p-3 backdrop-blur-sm sm:place-items-center" role="dialog" aria-modal="true">
-          <div className="bubble-card safe-bottom w-full max-w-lg p-5">
-            <div className="flex items-center justify-between">
-              <h2 className="display text-3xl font-black">
-                {modal === "accuse" ? t("accuse") : modal === "hint" ? t("buyHint") : "My secret"}
-              </h2>
-              <button onClick={() => setModal(null)} className="grid size-11 place-items-center rounded-full bg-pink-50"><X /></button>
-            </div>
-            {modal === "secret" ? (
-              <form action={submitSecretAction} className="mt-5 space-y-4">
-                <input type="hidden" name="locale" value={props.locale} />
-                <input type="hidden" name="gameId" value={props.game.id} />
-                <input type="hidden" name="playerId" value={props.playerId} />
-                <textarea name="value" className="field min-h-32" maxLength={500} required placeholder="I once…" />
-                <p className="text-xs text-[var(--muted)]">Only you and game admins can see this before it is revealed.</p>
-                {secretState.error ? (
-                  <p role="alert" className="text-sm font-semibold text-red-600">{secretState.error}</p>
-                ) : null}
-                <SaveSecretButton />
-              </form>
-            ) : (
-              <form action={modal === "accuse" ? buzzFormAction : hintFormAction} className="mt-5 space-y-4">
-                <input type="hidden" name="locale" value={props.locale} />
-                <input type="hidden" name="gameId" value={props.game.id} />
-                <select className="field" name="targetPlayerId" required defaultValue="">
-                  <option value="" disabled>Select a player</option>
-                  {targets.map((player) => <option key={player.id} value={player.id}>{player.profiles?.display_name ?? "Player"}</option>)}
-                </select>
-                {modal === "accuse" ? <textarea className="field min-h-28" name="theory" required placeholder="Their exact secret is…" /> : null}
-                {modalError ? (
-                  <p role="alert" className="text-sm font-semibold text-red-600">{modalError}</p>
-                ) : null}
-                <button className={`pill w-full ${modal === "accuse" ? "bg-red-500 text-white" : "bg-amber-300 text-amber-950"}`}>
-                  {modal === "accuse" ? <Megaphone size={18} /> : <Lightbulb size={18} />}
-                  Confirm buzz
-                </button>
-              </form>
-            )}
-          </div>
         </div>
       ) : null}
-
-      <div className="pointer-events-none fixed right-4 top-20 z-40 rounded-full bg-white p-3 shadow-lg">
-        <Bell size={18} className="text-pink-600" />
-      </div>
-    </section>
+    </div>
   );
 }
 
