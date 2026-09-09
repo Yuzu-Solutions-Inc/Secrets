@@ -95,6 +95,13 @@
     "round": "Live round",
     "balances": "House balances",
     "clue": "New clue",
-    "waiting": "The next twist is coming…"
+    "waiting": "The next twist is coming…",
+    "accusation": "Accusation",
+    "queue": "+{count} in queue",
+    "awaitRuling": "Stays on screen until the host validates the answer",
+    "sound": "Toggle sound",
+    "onBuzzer": "On the buzzer",
+    "faceOff": "Face-off",
+    "awaitingRuling": "Awaiting the host's ruling"
   }
 }

@@ -150,11 +150,23 @@ export function PlayerDashboard(props: Props) {
 
   useEffect(() => {
     const supabase = createClient();
+    let last = 0;
+    // display_cues is the single "something changed, re-fetch" signal for this
+    // game. A DB trigger inserts one on every round / wallet / event change and
+    // on every accusation buzz created or resolved, so the whole table refreshes
+    // in lock-step with the TV dashboard.
     const channel = supabase
-      .channel(`game:${props.game.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "game_events", filter: `game_id=eq.${props.game.id}` }, () => router.refresh())
-      .on("postgres_changes", { event: "*", schema: "public", table: "game_rounds", filter: `game_id=eq.${props.game.id}` }, () => router.refresh())
-      .on("postgres_changes", { event: "*", schema: "public", table: "wallets", filter: `game_id=eq.${props.game.id}` }, () => router.refresh())
+      .channel(`game-refresh:${props.game.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "display_cues", filter: `game_id=eq.${props.game.id}` },
+        () => {
+          const ts = Date.now();
+          if (ts - last < 300) return; // collapse trigger bursts
+          last = ts;
+          router.refresh();
+        },
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
