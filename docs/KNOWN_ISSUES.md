@@ -1,74 +1,72 @@
 # Known issues
 
-## 1. RLS policies recurse on direct authenticated SELECT
+## 1. RLS policies recurse on direct authenticated SELECT — FIXED
 
-**Status:** open · **Severity:** high (security model) · **Surfaced by:** CI `db-tests`
+**Status:** fixed in `supabase/migrations/20260909120000_fix_rls_recursion.sql`
+· **Severity:** high (security model) · **Surfaced by:** CI `db-tests`
 
 ### Symptom
 
 Running the pgTAP suites against a fresh database (`supabase db start` +
-`supabase test db`) fails immediately:
+`supabase test db`) failed immediately:
 
 ```
 ERROR: infinite recursion detected in policy for relation "secrets"
 ERROR: infinite recursion detected in policy for relation "missions"
 ```
 
-Both `supabase/tests/secrets_rls.sql` (pre-existing) and
-`supabase/tests/knowledge_boundaries.sql` (new) reproduce it. In CI the
-`supabase test db` step is marked `continue-on-error: true`, so the `db-tests`
-job reports the failure in its logs but does not block the PR until this is
-fixed.
+The player game page (`src/app/[locale]/(app)/games/[id]/page.tsx`) reads
+`mission_assignments`, `hint_grants`, `team_members` and friends directly as the
+authenticated user, so this was a live failure on that path, not just a test
+artifact.
 
 ### Root cause
 
-Policies in `supabase/migrations/20260908034241_secrets_security_and_functions.sql`
-contain inline `EXISTS (SELECT ... FROM <another RLS table> ...)` where that other
-table's policy queries the first table back:
+Policies in `20260908034241_secrets_security_and_functions.sql` contained an
+inline `EXISTS (SELECT ... FROM <another RLS table> ...)` where that other table's
+policy queried the first table back:
 
-| Policy | Subquery on | …whose policy queries back |
-| --- | --- | --- |
-| `secrets_scoped_select` | `secret_holders` | `secrets` |
-| `holders_scoped_select` | `secrets` | `secret_holders` |
-| `missions_scoped_select` | `mission_assignments` | `missions` |
-| `mission_assignments_scoped_select` | `missions` | `missions` |
-| `hints_scoped_select` | `secrets`, `hint_grants` | `hints` |
-| `teams_game_select` | `game_rounds` | (ok today, same shape) |
+| Cycle |
+| --- |
+| `secrets` ↔ `secret_holders` |
+| `hints` ↔ `hint_grants` |
+| `missions` ↔ `mission_assignments` |
 
-The `is_org_*` / `is_game_*` helpers avoid recursion because they are
-`SECURITY DEFINER` with `SET search_path = ''`, so they never re-enter RLS. The
-inline cross-table `EXISTS` subqueries do re-enter it.
+Postgres evaluates the referenced table's RLS mid-policy, re-enters the first
+policy and aborts. The `is_org_*` / `is_game_*` helpers avoid this because they
+are `SECURITY DEFINER` with `SET search_path = ''`, so their internal reads
+bypass RLS.
 
-### Why production still serves games
+### Fix
 
-Application reads mostly go through `SECURITY DEFINER` RPCs
-(`public_game_dashboard`, `house_secret_board`, the `*_action` functions), which
-bypass RLS entirely. The recursive path is the **direct** PostgREST / authenticated
-`SELECT` — precisely what the security model claims to protect, and precisely what
-the pgTAP suites exercise.
+`20260909120000_fix_rls_recursion.sql` adds `SECURITY DEFINER` helpers for every
+cross-table check that was inline (`is_secret_holder`, `can_admin_secret`,
+`owns_game_player`, `is_on_team`, `can_admin_hint`, `plays_hint_game`,
+`can_view_hint`, `is_mission_participant`, `can_admin_mission`) and recreates the
+8 affected policies to call them. Each helper is a literal translation of the
+predicate it replaced, so access semantics are unchanged. Verified by
+`supabase/tests/secrets_rls.sql` and `supabase/tests/knowledge_boundaries.sql`
+in the `db-tests` CI job (now blocking).
 
-### Fix direction
+### Still to do (production)
 
-Mirror the existing helper pattern. Add `SECURITY DEFINER` functions such as:
+The migration fixes a fresh database and any environment it is applied to. If
+production's policies were hand-patched in the dashboard, apply this migration
+there and confirm `secrets_scoped_select` / `missions_scoped_select` etc. match
+the file. See item 2.
 
-- `public.is_secret_holder(p_secret_id uuid)`
-- `public.is_mission_participant(p_mission_id uuid)`
-- `public.can_read_hint(p_hint_id uuid)`
+## 2. Production grants / policies not captured in migrations
 
-…and rewrite `secrets_scoped_select`, `holders_scoped_select`,
-`hints_scoped_select`, `grants_scoped_select`, `missions_scoped_select`,
-`mission_assignments_scoped_select` (and any peers) to call the helpers instead of
-inline `EXISTS` on an RLS-protected table. Ship as a new
-`supabase/migrations/*.sql`.
-
-**Done when:** `supabase test db` passes both suites in CI, `continue-on-error` is
-removed from the `db-tests` job, and production policies are reconciled with the
-migration file (capture current prod state first — see
-[`MIGRATIONS.md`](./MIGRATIONS.md)).
-
-## 2. Production grants not captured in migrations
+**Status:** open · needs production database access (partner-owned account)
 
 `SELECT` on `public.games` is revoked from the `anon` role in production, but no
-migration performs that revoke. `supabase db push` against an empty database will
-not reproduce production's grant state. Capture it into a migration before
-relying on a from-scratch rebuild. See [`MIGRATIONS.md`](./MIGRATIONS.md).
+migration performs that revoke — so `supabase db push` against an empty database
+does not reproduce production's grant state, and there may be other hand-applied
+differences (grants, or dashboard-edited policies).
+
+This needs someone with `psql` access to the production database to dump the
+current grant and policy state and reconcile it into a migration. It is on the
+[`PRODUCTION_CHECKLIST.md`](./PRODUCTION_CHECKLIST.md). Do not guess a grant
+matrix blind — e.g. revoking `anon` SELECT on `public.games` would break the
+`display_cues_public_select` policy's subquery for anonymous viewers of the
+public TV display.
