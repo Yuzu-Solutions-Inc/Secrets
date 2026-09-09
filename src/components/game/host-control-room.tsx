@@ -57,7 +57,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
 import { secretCategories } from "@/lib/game/templates";
 import { powerSeeds } from "@/lib/game/seeds";
-import { InvitePlayerForm } from "./invite-player-form";
+import { WhitelistManager } from "./whitelist-manager";
 
 type Row = Record<string, unknown>;
 
@@ -74,6 +74,8 @@ export function HostControlRoom({
   teams,
   ledger,
   dilemmaResponses = [],
+  whitelist = [],
+  inviteUrl = "",
 }: {
   locale: string;
   game: Row;
@@ -87,6 +89,8 @@ export function HostControlRoom({
   teams: Row[];
   ledger: Row[];
   dilemmaResponses?: { game_event_id: string; choice: string }[];
+  whitelist?: { id: string; email: string }[];
+  inviteUrl?: string;
 }) {
   const t = useTranslations("host");
   const router = useRouter();
@@ -259,10 +263,11 @@ export function HostControlRoom({
                 <button className="pill pill-primary">Apply</button>
               </form>
             ) : (
-              <InvitePlayerForm
+              <WhitelistManager
                 locale={locale}
-                organizationId={String(game.organization_id)}
                 gameId={String(game.id)}
+                inviteUrl={inviteUrl}
+                whitelist={whitelist as { id: string; email: string }[]}
               />
             )}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

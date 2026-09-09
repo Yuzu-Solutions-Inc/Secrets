@@ -152,6 +152,8 @@ export const games = pgTable("games", {
   startingCash: bigint("starting_cash", { mode: "number" }).notNull().default(1000000),
   backgroundPath: text("background_path"),
   publicCode: text("public_code").notNull().unique(),
+  // One shared join link per game; only whitelisted emails can actually join.
+  inviteToken: text("invite_token").notNull().unique(),
   currentRoundId: uuid("current_round_id"),
   settings: jsonb("settings").notNull().default({}),
   startsAt: timestamp("starts_at", { withTimezone: true }),
@@ -159,6 +161,18 @@ export const games = pgTable("games", {
   createdBy: uuid("created_by").notNull().references(() => profiles.id),
   ...timestamps,
 });
+
+// Strict allow-list for a game's shared join link (item 2). The host adds
+// emails; join_game() refuses anyone not listed.
+export const gameWhitelist = pgTable("game_whitelist", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  gameId: uuid("game_id").notNull().references(() => games.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  addedBy: uuid("added_by").references(() => profiles.id),
+  createdAt: timestamps.createdAt,
+}, (table) => [
+  uniqueIndex("game_whitelist_unique").on(table.gameId, sql`lower(${table.email})`),
+]);
 
 export const gamePlayers = pgTable(
   "game_players",

@@ -91,6 +91,7 @@ export async function createGame(formData: FormData) {
   const user = await actor();
   const supabase = await createClient();
   const code = randomBytes(4).toString("hex").toUpperCase();
+  const inviteToken = randomBytes(16).toString("hex");
 
   // The chosen format is a template: it decides the economy and the round
   // set. Everything here is editable afterwards in the game's Settings tab.
@@ -106,6 +107,7 @@ export async function createGame(formData: FormData) {
       format: parsed.format,
       starting_cash: economy.startingCash * 100,
       public_code: code,
+      invite_token: inviteToken,
       created_by: user.id,
       settings: {
         economy: { accusationStake, hintPrice },

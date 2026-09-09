@@ -23,6 +23,9 @@ export default async function HostPage({
     .maybeSingle();
   if (!game) notFound();
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const inviteUrl = `${appUrl}/${locale}/join/${game.invite_token}`;
+
   const [
     { data: players },
     { data: rounds },
@@ -33,6 +36,7 @@ export default async function HostPage({
     { data: houseSecret },
     { data: teams },
     { data: ledger },
+    { data: whitelist },
   ] = await Promise.all([
     supabase.from("game_players").select("id,user_id,is_ready,play_status,profiles(display_name,email,avatar_path),wallets(balance)").eq("game_id", id),
     supabase.from("game_rounds").select("*").eq("game_id", id).order("position"),
@@ -43,6 +47,7 @@ export default async function HostPage({
     supabase.from("house_secrets").select("*,house_secret_clues(*)").eq("game_id", id).maybeSingle(),
     supabase.from("teams").select("*,team_members(player_id,game_players(profiles(display_name))),wallets(balance)").eq("game_id", id),
     supabase.from("ledger_transactions").select("id,type,description,created_at,reversed_transaction_id,ledger_entries(amount,wallets(kind,player_id,game_players(profiles(display_name)),teams(name)))").eq("game_id", id).order("created_at", { ascending: false }).limit(50),
+    supabase.from("game_whitelist").select("id,email").eq("game_id", id).order("created_at"),
   ]);
 
   // Dilemma answers, stacked per broadcast (item 14). game_event_responses has
@@ -66,6 +71,8 @@ export default async function HostPage({
       teams={teams ?? []}
       ledger={ledger ?? []}
       dilemmaResponses={dilemmaResponses ?? []}
+      whitelist={whitelist ?? []}
+      inviteUrl={inviteUrl}
     />
   );
 }

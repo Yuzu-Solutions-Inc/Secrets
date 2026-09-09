@@ -7,7 +7,7 @@ This project is inspired by social-deduction reality formats, but it does not in
 ## What is included
 
 - French and English player experiences
-- Admin and Player roles with email/password, Google OAuth, reset and hashed invitations
+- Admin and Player roles with email/password, Google OAuth, reset, and one shared per-game join link gated by a host-managed email whitelist
 - Quick Night, Weekend and Custom round schedules
 - Private or shared secrets with host lock, replacement audit and text/image hint decks
 - Accusation buzzes and paid hint buzzes

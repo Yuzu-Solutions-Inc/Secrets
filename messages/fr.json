@@ -44,7 +44,9 @@
       "invalid_invitation": "Cette invitation est invalide, expirée ou déjà utilisée.",
       "email_mismatch": "Cette invitation a été envoyée à une adresse courriel différente de celle avec laquelle vous êtes connecté.",
       "late_join_closed": "Cette partie a déjà commencé et n’accepte plus de nouveaux joueurs.",
-      "unknown": "Une erreur est survenue lors de l’ajout. Veuillez réessayer."
+      "unknown": "Une erreur est survenue lors de l’ajout. Veuillez réessayer.",
+      "invalid_link": "Ce lien est invalide.",
+      "not_whitelisted": "Votre courriel n'est pas sur la liste de l'hôte pour cette partie. Demandez-lui de l'ajouter."
     }
   },
   "errorPage": {

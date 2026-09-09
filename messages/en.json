@@ -44,7 +44,9 @@
       "invalid_invitation": "This invitation is invalid, expired, or has already been used.",
       "email_mismatch": "This invitation was sent to a different email address than the one you’re signed in with.",
       "late_join_closed": "This game has already started and isn’t accepting new players.",
-      "unknown": "Something went wrong while joining. Please try again."
+      "unknown": "Something went wrong while joining. Please try again.",
+      "invalid_link": "This link is invalid.",
+      "not_whitelisted": "Your email isn't on the host's list for this game. Ask them to add it."
     }
   },
   "errorPage": {
