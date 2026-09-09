@@ -1,6 +1,6 @@
 "use client";
 
-import { Maximize2, PartyPopper, Siren, Sparkles, Timer, Unlock, Volume2, VolumeX } from "lucide-react";
+import { Lightbulb, Maximize2, Megaphone, PartyPopper, ShieldQuestion, Siren, Sparkles, Timer, Unlock, Volume2, VolumeX, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -34,9 +34,21 @@ export type DashboardData = {
   players: Row[];
   round: Row | null;
   latest_event: Row | null;
+  recent_events: Row[] | null;
   accusation: Accusation | null;
   accusation_queue: number | null;
   verdict: Verdict | null;
+};
+
+// A broadcast event holds the screen full-size for a minute, then lives on in
+// the history column (item 18). Phones show it for 5s (player dashboard).
+const TAKEOVER_MS = 60_000;
+
+const EVENT_META: Record<string, { icon: typeof Megaphone; tint: string; label: string }> = {
+  announcement: { icon: Megaphone, tint: "from-pink-500 to-fuchsia-600", label: "Announcement" },
+  clue: { icon: Lightbulb, tint: "from-amber-400 to-orange-500", label: "Clue" },
+  dilemma: { icon: ShieldQuestion, tint: "from-violet-500 to-indigo-600", label: "Dilemma" },
+  power: { icon: Zap, tint: "from-emerald-500 to-teal-600", label: "Power" },
 };
 
 export function PublicDisplay({ code, initialData }: { locale: string; code: string; initialData: DashboardData }) {
@@ -46,6 +58,7 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
   const [soundOn, setSoundOn] = useState(true);
   const [alarm, setAlarm] = useState(false);
   const [verdictCard, setVerdictCard] = useState<Verdict | null>(null);
+  const [takeover, setTakeover] = useState<Row | null>(null);
 
   const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
   const fetchingRef = useRef(false);
@@ -53,12 +66,13 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
   const audioRef = useRef<AudioContext | null>(null);
   const announcedRef = useRef<string | null>(null);
   const verdictSeenRef = useRef<string | null>(null);
+  const eventSeenRef = useRef<string | null>(null);
   const mountedRef = useRef(false);
 
   const game = data.game;
   const players = useMemo(() => data.players ?? [], [data.players]);
   const round = data.round;
-  const latestEvent = data.latest_event;
+  const recentEvents = useMemo(() => data.recent_events ?? [], [data.recent_events]);
   const accusation = data.accusation;
   const accusationQueue = data.accusation_queue ?? 0;
   const verdict = data.verdict;
@@ -125,6 +139,28 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
     tone(0, 233, 0.3, "square", 0.28);
     tone(0.34, 175, 0.52, "square", 0.28);
   }, [ensureAudio, tone]);
+
+  const playEventChime = useCallback(
+    (kind: string) => {
+      const ctx = ensureAudio();
+      if (!ctx || ctx.state !== "running") return;
+      if (kind === "clue") {
+        tone(0, 880, 0.18, "sine", 0.22);
+        tone(0.14, 1174.7, 0.4, "sine", 0.22);
+      } else if (kind === "dilemma") {
+        tone(0, 392, 0.22, "triangle", 0.24);
+        tone(0.18, 523.25, 0.22, "triangle", 0.24);
+        tone(0.36, 392, 0.4, "triangle", 0.2);
+      } else if (kind === "power") {
+        tone(0, 659.25, 0.14, "square", 0.2);
+        tone(0.12, 987.77, 0.5, "square", 0.2);
+      } else {
+        tone(0, 587.33, 0.16, "triangle", 0.26);
+        tone(0.16, 783.99, 0.5, "triangle", 0.26);
+      }
+    },
+    [ensureAudio, tone],
+  );
 
   const playFanfare = useCallback(
     (result: Verdict["result"]) => {
@@ -198,6 +234,27 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
     const clear = window.setTimeout(() => setVerdictCard(null), 6200);
     return () => window.clearTimeout(clear);
   }, [verdict, soundOn, playFanfare]);
+
+  // Seed the "last seen event" once, so the first paint never fires a takeover.
+  const eventSeededRef = useRef(false);
+  useEffect(() => {
+    if (eventSeededRef.current) return;
+    eventSeededRef.current = true;
+    eventSeenRef.current = recentEvents[0] ? String(recentEvents[0].id) : null;
+  }, [recentEvents]);
+
+  // ---- new broadcast: full-screen takeover, then it drops into history ----
+  useEffect(() => {
+    if (!eventSeededRef.current) return;
+    const newest = recentEvents[0];
+    const id = newest ? String(newest.id) : null;
+    if (!id || id === eventSeenRef.current) return;
+    eventSeenRef.current = id;
+    setTakeover(newest);
+    if (soundOn) playEventChime(String(newest.kind ?? "announcement"));
+    const clear = window.setTimeout(() => setTakeover(null), TAKEOVER_MS);
+    return () => window.clearTimeout(clear);
+  }, [recentEvents, soundOn, playEventChime]);
 
   const confetti = useMemo(
     () =>
@@ -386,6 +443,28 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
         </div>
       ) : null}
 
+      {takeover ? (() => {
+        const meta = EVENT_META[String(takeover.kind)] ?? EVENT_META.announcement;
+        const Icon = meta.icon;
+        return (
+          <div className="pointer-events-none absolute inset-0 z-[45] grid place-items-center overflow-hidden p-[clamp(1rem,4vw,4rem)]">
+            <div className={`secrets-verdict relative w-full max-w-[min(90vw,64rem)] rounded-[clamp(2rem,4vw,4rem)] border border-white/25 bg-gradient-to-br ${meta.tint} p-[clamp(2rem,5vw,5rem)] text-center shadow-[0_40px_120px_rgba(0,0,0,.5)] backdrop-blur-md`}>
+              <p className="tv-text-shadow flex items-center justify-center gap-4 text-[clamp(.9rem,1.6vw,1.8rem)] font-black uppercase tracking-[.3em] text-white/90">
+                <Icon size="1.2em" /> {meta.label}
+              </p>
+              <h2 className="tv-text-shadow display mt-[clamp(.5rem,1.5vw,1.25rem)] text-[clamp(2rem,6vw,5rem)] font-black leading-[1] text-white">
+                {String(takeover.title)}
+              </h2>
+              {takeover.body ? (
+                <p className="tv-text-shadow mx-auto mt-[clamp(.5rem,1.6vw,1.5rem)] max-w-[40ch] text-[clamp(1rem,2vw,2rem)] font-bold text-white/95">
+                  {String(takeover.body)}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        );
+      })() : null}
+
       {/* Fluid layout — fills the viewport in fullscreen and maximises the
           available space when windowed, instead of a fixed stage scaled down. */}
       <div className="pointer-events-none absolute inset-0 bg-[#160318]/35" />
@@ -470,12 +549,24 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
             <p className="tv-text-shadow flex items-center gap-[8px] text-[clamp(.7rem,1.2vw,1rem)] font-black uppercase tracking-[.2em] text-pink-100">
               <Sparkles className="size-[1em]" /> {t("live")}
             </p>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {latestEvent ? (
-                <div className="rounded-[20px] bg-white p-[clamp(1rem,1.8vw,1.35rem)] text-[#1f1024]">
-                  <h3 className="display line-clamp-2 text-[clamp(1.15rem,1.9vw,1.6rem)] font-black leading-tight">{String(latestEvent.title)}</h3>
-                  <p className="mt-[6px] line-clamp-4 text-[clamp(.85rem,1.3vw,1.05rem)] font-medium leading-snug">{String(latestEvent.body ?? "")}</p>
-                </div>
+            <div className="flex min-h-0 flex-1 flex-col gap-[clamp(.5rem,1vw,.75rem)] overflow-y-auto">
+              {recentEvents.length ? (
+                recentEvents.map((event, index) => {
+                  const meta = EVENT_META[String(event.kind)] ?? EVENT_META.announcement;
+                  const Icon = meta.icon;
+                  return (
+                    <div
+                      key={String(event.id)}
+                      className={`rounded-[18px] bg-white p-[clamp(.85rem,1.5vw,1.15rem)] text-[#1f1024] ${index === 0 ? "" : "opacity-75"}`}
+                    >
+                      <p className="flex items-center gap-[6px] text-[clamp(.6rem,.9vw,.75rem)] font-black uppercase tracking-widest text-pink-700">
+                        <Icon size="1em" /> {meta.label}
+                      </p>
+                      <h3 className="display mt-[4px] line-clamp-2 text-[clamp(1rem,1.7vw,1.4rem)] font-black leading-tight">{String(event.title)}</h3>
+                      {event.body ? <p className="mt-[4px] line-clamp-3 text-[clamp(.8rem,1.2vw,1rem)] font-medium leading-snug">{String(event.body)}</p> : null}
+                    </div>
+                  );
+                })
               ) : (
                 <p className="tv-text-shadow text-[clamp(.85rem,1.3vw,1.05rem)] font-semibold text-white/70">{t("waiting")}</p>
               )}
