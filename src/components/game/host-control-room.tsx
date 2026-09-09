@@ -827,10 +827,15 @@ export function HostControlRoom({
                 <option value="">No team assignment</option>
                 {teams.map((team) => <option key={String(team.id)} value={String(team.id)}>{String(team.name)}</option>)}
               </select>
+              <label className="flex items-center gap-2 font-bold sm:col-span-2"><input type="checkbox" name="assignAll" /> Assign to all active players (overrides the player/team picks)</label>
               <textarea className="field min-h-24 sm:col-span-2" name="instructions" placeholder="Secret instructions…" required />
               <select className="field" name="visibility" defaultValue="private">
                 <option value="private">Private</option><option value="team">Team</option><option value="public">Public</option>
               </select>
+              <label className="grid gap-1">
+                <span className="text-xs font-bold text-[var(--muted)]">Timer — minutes (0 = none)</span>
+                <input className="field" name="timerMinutes" type="number" min="0" max="1440" defaultValue="0" />
+              </label>
               <div className="grid grid-cols-2 gap-3 sm:col-span-2">
                 <label className="grid gap-1">
                   <span className="text-xs font-bold text-emerald-700">Reward — paid to the player when you approve</span>
@@ -858,6 +863,14 @@ export function HostControlRoom({
                   </div>
                   <h2 className="display mt-4 text-2xl font-black">{String(mission.title)}</h2>
                   <p className="mt-2 text-sm text-[var(--muted)]">{String(mission.instructions)}</p>
+                  {mission.deadline ? (() => {
+                    const left = Math.floor((new Date(String(mission.deadline)).getTime() - now) / 1000);
+                    return (
+                      <p className={`mt-2 text-xs font-black ${left <= 0 ? "text-red-600" : "text-[var(--muted)]"}`}>
+                        {left <= 0 ? "Timer expired" : `Timer: ${String(Math.floor(left / 60)).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`}
+                      </p>
+                    );
+                  })() : null}
                   <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 font-black">
                     <span className="text-emerald-600">Reward +{formatMoney(Number(mission.reward), String(game.currency_symbol))}</span>
                     {penalty > 0 ? (
