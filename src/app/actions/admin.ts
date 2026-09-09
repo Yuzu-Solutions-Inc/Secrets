@@ -2,9 +2,10 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { roundConfigSchema, winnerFormulaSchema } from "@/lib/game/rules";
+import { dilemmaEffectsSchema, roundConfigSchema, winnerFormulaSchema } from "@/lib/game/rules";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { processImage } from "@/lib/images";
@@ -30,7 +31,16 @@ export async function addRound(formData: FormData) {
     walletMode: z.enum(["temporary_team", "pooled_personal", "personal"]),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
-  const { count } = await supabase.from("game_rounds").select("id", { count: "exact", head: true }).eq("game_id", parsed.gameId);
+  const { data: existing } = await supabase
+    .from("game_rounds")
+    .select("id,kind,position")
+    .eq("game_id", parsed.gameId)
+    .order("position", { ascending: true });
+  const rows = (existing ?? []) as { id: string; kind: string; position: number }[];
+  const finale = rows.find((r) => r.kind === "finale");
+  // The finale is a singleton and always the last round.
+  if (parsed.kind === "finale" && finale) throw new Error("finale_exists");
+
   const config = roundConfigSchema.parse({
     durationMinutes: parsed.durationMinutes,
     walletMode: parsed.walletMode,
@@ -42,26 +52,40 @@ export async function addRound(formData: FormData) {
     hintVisibility: parsed.kind === "team" ? "team" : "private",
     completion: parsed.kind === "nomination" ? "all_submitted" : "manual",
   });
+
+  const maxPos = rows.reduce((m, r) => Math.max(m, Number(r.position)), -1);
+  let position = maxPos + 1;
+  if (parsed.kind !== "finale" && finale) {
+    // Slot the new round into the finale's place and bump the finale past the
+    // end so it stays last (dodging the game_id/position unique index).
+    position = Number(finale.position);
+    const { error: bump } = await supabase
+      .from("game_rounds")
+      .update({ position: maxPos + 1 })
+      .eq("id", finale.id);
+    if (bump) throw new Error(bump.message);
+  }
+
   const { error } = await supabase.from("game_rounds").insert({
     game_id: parsed.gameId,
     title: parsed.title,
     kind: parsed.kind,
-    position: count ?? 0,
+    position,
     config,
   });
   if (error) throw new Error(error.message);
   refresh(parsed.locale, parsed.gameId);
 }
 
-export async function moveRound(formData: FormData) {
-  const parsed = base.extend({
-    roundId: z.string().uuid(),
-    direction: z.enum(["up", "down"]),
-  }).parse(Object.fromEntries(formData));
+// Drag-to-reorder writes the whole round order at once (replaces the old
+// up/down arrow control). The RPC keeps a finale pinned last.
+export async function reorderRounds(formData: FormData) {
+  const parsed = base.extend({ roundIds: z.string() }).parse(Object.fromEntries(formData));
+  const roundIds = z.array(z.string().uuid()).min(1).parse(JSON.parse(parsed.roundIds));
   const supabase = await createClient();
-  const { error } = await supabase.rpc("move_game_round", {
-    p_round_id: parsed.roundId,
-    p_direction: parsed.direction,
+  const { error } = await supabase.rpc("reorder_game_rounds", {
+    p_game_id: parsed.gameId,
+    p_round_ids: roundIds,
   });
   if (error) throw new Error(error.message);
   refresh(parsed.locale, parsed.gameId);
@@ -405,18 +429,25 @@ export async function publishEvent(formData: FormData) {
   refresh(parsed.locale, parsed.gameId);
 }
 
-// Dilemma: two options the audience picks between on their phone. The host
-// later reads the answers stacked per dilemma (game_event_responses).
+// Dilemma: one sentence the targeted players Accept or Refuse on their phone.
+// The host attaches effects that fire automatically on Accept
+// (`apply_dilemma_effects`). The host reads the Accept/Refuse tally per dilemma.
 export async function publishDilemma(formData: FormData) {
   const parsed = base.extend({
-    prompt: z.string().trim().min(2).max(200),
-    option1: z.string().trim().min(1).max(120),
-    option2: z.string().trim().min(1).max(120),
+    prompt: z.string().trim().min(2).max(240),
     scope: z.enum(["all", "team", "player"]),
     isPublic: z.coerce.boolean(),
     teamId: z.string().uuid().optional().or(z.literal("")),
     playerId: z.string().uuid().optional().or(z.literal("")),
+    effects: z.string().optional().default("[]"),
   }).parse(Object.fromEntries(formData));
+
+  const effects = dilemmaEffectsSchema.parse(JSON.parse(parsed.effects || "[]"));
+  // Store cash amounts in cents to match the rest of the ledger.
+  const storedEffects = effects.map((effect) =>
+    effect.type === "cash" ? { ...effect, amount: effect.amount * 100 } : effect,
+  );
+
   const supabase = await createClient();
   const { error } = await supabase.from("game_events").insert({
     game_id: parsed.gameId,
@@ -425,11 +456,10 @@ export async function publishDilemma(formData: FormData) {
     is_public: parsed.isPublic,
     published_at: new Date().toISOString(),
     payload: {
-      option_1: parsed.option1,
-      option_2: parsed.option2,
       scope: parsed.scope,
       team_id: parsed.scope === "team" ? parsed.teamId || null : null,
       player_id: parsed.scope === "player" ? parsed.playerId || null : null,
+      effects: storedEffects,
     },
   });
   if (error) throw new Error(error.message);
@@ -484,7 +514,10 @@ export async function assignPower(formData: FormData) {
 export async function setPlayerPlayStatus(formData: FormData) {
   const parsed = base.extend({
     playerId: z.string().uuid(),
-    status: z.enum(["active", "inactive", "eliminated", "spectator"]),
+    // "Deactivate" and "Eliminate" were merged into one reversible toggle:
+    // a player is either `active` or `eliminated` (`spectator` is set by the
+    // finale, not this control).
+    status: z.enum(["active", "eliminated", "spectator"]),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
   const { error } = await supabase.rpc("set_player_play_status", {
@@ -493,18 +526,63 @@ export async function setPlayerPlayStatus(formData: FormData) {
     p_status: parsed.status,
   });
   if (error) {
-    // Surface the two expected refusals from `set_player_play_status` as
-    // readable text; the host sees these in a toast, not the error boundary.
+    // Surface the expected refusal from `set_player_play_status` as readable
+    // text; the host sees this in a toast, not the error boundary.
     const message =
-      error.message === "elimination_round_required"
-        ? "Start a live elimination round before eliminating a player."
-        : error.message === "forbidden"
-          ? "You don't have permission to change this player's status."
-          : error.message;
+      error.message === "forbidden"
+        ? "You don't have permission to change this player's status."
+        : error.message;
     return { error: message };
   }
   refresh(parsed.locale, parsed.gameId);
   return { error: null };
+}
+
+// Host action: remove a player from the game entirely (and drop their invite so
+// the shared link can't re-admit them). Only works while the player has no game
+// history — otherwise the host is told to deactivate instead.
+export async function removeGamePlayer(formData: FormData) {
+  const parsed = base.extend({
+    playerId: z.string().uuid(),
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("remove_game_player", {
+    p_game_id: parsed.gameId,
+    p_player_id: parsed.playerId,
+  });
+  if (error) {
+    const message =
+      error.message === "forbidden"
+        ? "You don't have permission to remove this player."
+        : error.message === "player_has_activity"
+          ? "This player already has game history — deactivate them instead."
+          : error.message === "not_found"
+            ? "That player is no longer in the game."
+            : error.message;
+    return { error: message };
+  }
+  refresh(parsed.locale, parsed.gameId);
+  return { error: null };
+}
+
+// Host action (Settings tab): permanently delete the whole game. The
+// `delete_game` RPC is admin-gated; every game-scoped table cascades off
+// games(id), so the row delete tears the game down completely.
+export async function deleteGame(formData: FormData) {
+  const parsed = base.parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("delete_game", { p_game_id: parsed.gameId });
+  if (error) {
+    const message =
+      error.message === "forbidden"
+        ? "You don't have permission to delete this game."
+        : error.message === "not_found"
+          ? "That game no longer exists."
+          : error.message;
+    return { error: message };
+  }
+  revalidatePath(`/${parsed.locale}/games`, "page");
+  redirect(`/${parsed.locale}/games`);
 }
 
 // Host action: give every active player without a secret a random unused entry
@@ -526,6 +604,7 @@ export async function updateGameSettings(formData: FormData) {
     location: z.string().trim().max(200).optional().default(""),
     startsAt: z.string().trim().optional().default(""),
     secretCategory: z.string().trim().max(40).optional().default("mixed"),
+    houseSecretEnabled: z.enum(["on"]).optional(),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
 
@@ -549,6 +628,10 @@ export async function updateGameSettings(formData: FormData) {
         language: parsed.language,
         location: parsed.location || null,
         secretCategory: parsed.secretCategory || "mixed",
+        houseSecret: {
+          ...(settings.houseSecret as Record<string, unknown> | undefined),
+          enabled: parsed.houseSecretEnabled === "on",
+        },
       },
     })
     .eq("id", parsed.gameId);
@@ -621,20 +704,109 @@ export async function createHouseSecret(formData: FormData) {
   refresh(parsed.locale, parsed.gameId);
 }
 
+// House Secret clues are managed exactly like a secret's hints (item 7 shape):
+// one entry carries optional text and/or an optional image, ordered by
+// `position`. They are created HELD — never released on insert and never for
+// sale. The host releases them one by one (`releaseHouseClue`) or lets
+// `releaseRandomHouseClue` pick one.
 export async function addHouseClue(formData: FormData) {
   const parsed = base.extend({
     houseSecretId: z.string().uuid(),
-    chapter: z.coerce.number().int().min(1).max(100),
-    text: z.string().trim().min(1).max(500),
+    text: z.string().trim().max(500).optional().default(""),
     isDecoy: z.enum(["on"]).optional(),
   }).parse(Object.fromEntries(formData));
+  const image = optionalImage(formData.get("image"));
+  if (!parsed.text && !image) throw new Error("clue_needs_content");
+
   const supabase = await createClient();
+  const { data: game } = await supabase
+    .from("house_secrets")
+    .select("game_id")
+    .eq("id", parsed.houseSecretId)
+    .maybeSingle();
+  if (!game) throw new Error("house_secret_not_found");
+  const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
+  if (!allowed) throw new Error("forbidden");
+
+  const { count } = await supabase
+    .from("house_secret_clues")
+    .select("id", { count: "exact", head: true })
+    .eq("house_secret_id", parsed.houseSecretId);
+
+  let assetPath: string | null = null;
+  if (image) {
+    const { buffer, contentType } = await processImage(image, "hint");
+    assetPath = `games/${parsed.gameId}/house-clues/${crypto.randomUUID()}.webp`;
+    const { error: uploadError } = await createAdminClient().storage.from("game-assets").upload(assetPath, buffer, { contentType });
+    if (uploadError) throw new Error(uploadError.message);
+  }
+
   const { error } = await supabase.from("house_secret_clues").insert({
     house_secret_id: parsed.houseSecretId,
-    chapter: parsed.chapter,
-    text: parsed.text,
+    position: count ?? 0,
+    text: parsed.text || null,
+    asset_path: assetPath,
     is_decoy: parsed.isDecoy === "on",
-    released_at: new Date().toISOString(),
+  });
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+export async function editHouseClue(formData: FormData) {
+  const parsed = base.extend({
+    clueId: z.string().uuid(),
+    text: z.string().trim().min(1).max(500),
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
+  if (!allowed) throw new Error("forbidden");
+  const { error } = await supabase
+    .from("house_secret_clues")
+    .update({ text: parsed.text })
+    .eq("id", parsed.clueId)
+    .not("text", "is", null);
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+export async function deleteHouseClue(formData: FormData) {
+  const parsed = base.extend({
+    clueId: z.string().uuid(),
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
+  if (!allowed) throw new Error("forbidden");
+  const { error } = await supabase.from("house_secret_clues").delete().eq("id", parsed.clueId);
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+// Release one specific held clue.
+export async function releaseHouseClue(formData: FormData) {
+  const parsed = base.extend({
+    clueId: z.string().uuid(),
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
+  if (!allowed) throw new Error("forbidden");
+  const { error } = await supabase
+    .from("house_secret_clues")
+    .update({ released_at: new Date().toISOString() })
+    .eq("id", parsed.clueId)
+    .is("released_at", null);
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+// Release a random held clue — the house clue "drop" the host triggers instead
+// of choosing which fragment comes next.
+export async function releaseRandomHouseClue(formData: FormData) {
+  const parsed = base.extend({
+    houseSecretId: z.string().uuid(),
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("release_random_house_clue", {
+    p_house_secret_id: parsed.houseSecretId,
   });
   if (error) throw new Error(error.message);
   refresh(parsed.locale, parsed.gameId);

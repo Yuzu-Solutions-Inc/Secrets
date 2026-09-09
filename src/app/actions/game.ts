@@ -80,12 +80,14 @@ export async function createGame(formData: FormData) {
     title: z.string().trim().min(2).max(100),
     format: z.enum(["quick", "weekend", "custom"]),
     secretCategory: z.string().trim().max(40).optional().default("mixed"),
+    houseSecret: z.enum(["on"]).optional(),
     locale: localeSchema,
   }).parse({
     organizationId: formData.get("organizationId"),
     title: formData.get("title"),
     format: formData.get("format"),
     secretCategory: formData.get("secretCategory"),
+    houseSecret: formData.get("houseSecret") ?? undefined,
     locale: formData.get("locale"),
   });
   const user = await actor();
@@ -113,6 +115,7 @@ export async function createGame(formData: FormData) {
         economy: { accusationStake, hintPrice },
         language: parsed.locale,
         secretCategory: parsed.secretCategory || "mixed",
+        houseSecret: { enabled: parsed.houseSecret === "on" },
       },
     })
     .select("id")
@@ -286,17 +289,26 @@ export async function setDilemmaChoice(formData: FormData) {
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
 }
 
-// A player's answer to a broadcast dilemma (item 14). Upserts their single
-// row in game_event_responses; the host reads the stack.
-export async function submitDilemmaChoice(formData: FormData) {
+// A player's answer to a broadcast dilemma. Upserts their single row in
+// game_event_responses; on Accept, the dilemma's effects are applied
+// automatically. The host reads the Accept/Refuse tally.
+export async function respondToDilemma(formData: FormData) {
   const parsed = z.object({
     gameId: z.string().uuid(),
     eventId: z.string().uuid(),
     playerId: z.string().uuid(),
-    choice: z.enum(["option_1", "option_2"]),
+    choice: z.enum(["accept", "refuse"]),
     locale: localeSchema,
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
+
+  const { data: prior } = await supabase
+    .from("game_event_responses")
+    .select("choice")
+    .eq("game_event_id", parsed.eventId)
+    .eq("player_id", parsed.playerId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("game_event_responses")
     .upsert(
@@ -304,6 +316,16 @@ export async function submitDilemmaChoice(formData: FormData) {
       { onConflict: "game_event_id,player_id" },
     );
   if (error) throw new Error(error.message);
+
+  // Fire effects the first time this player accepts. The RPC is itself
+  // idempotent, so a re-accept is harmless.
+  if (parsed.choice === "accept" && prior?.choice !== "accept") {
+    const { error: effectError } = await supabase.rpc("apply_dilemma_effects", {
+      p_event_id: parsed.eventId,
+      p_player_id: parsed.playerId,
+    });
+    if (effectError) throw new Error(effectError.message);
+  }
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
 }
 
@@ -524,20 +546,54 @@ export async function markMissionSeen(formData: FormData) {
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
 }
 
-export async function submitHouseTheory(formData: FormData) {
+// A player names their theory of the House Secret — the house-wide equivalent
+// of an accusation buzz.
+//
+// Timing rule: if the run-of-show includes a House Secret round, the House can
+// only be accused while that round is live. With no such round in the schedule,
+// it can be accused at any time.
+export async function submitHouseTheory(
+  _prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
   const parsed = z.object({
     gameId: z.string().uuid(),
     houseSecretId: z.string().uuid(),
     playerId: z.string().uuid(),
     theory: z.string().trim().min(3).max(500),
     locale: localeSchema,
-  }).parse(Object.fromEntries(formData));
+  }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { success: false, error: "Write a theory of 3 to 500 characters." };
+  }
   const supabase = await createClient();
+
+  const { data: houseRounds } = await supabase
+    .from("game_rounds")
+    .select("status")
+    .eq("game_id", parsed.data.gameId)
+    .eq("kind", "house_secret");
+  if (houseRounds && houseRounds.length > 0) {
+    const anyLive = houseRounds.some((round) => round.status === "live");
+    if (!anyLive) {
+      return {
+        success: false,
+        error: "The House can only be accused during the House Secret round.",
+      };
+    }
+  }
+
   const { error } = await supabase.from("house_secret_submissions").insert({
-    house_secret_id: parsed.houseSecretId,
-    player_id: parsed.playerId,
-    theory: parsed.theory,
+    house_secret_id: parsed.data.houseSecretId,
+    player_id: parsed.data.playerId,
+    theory: parsed.data.theory,
   });
-  if (error) throw new Error(error.message);
-  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+  if (error) {
+    return {
+      success: false,
+      error: "Something went wrong submitting your theory. Please try again.",
+    };
+  }
+  revalidatePath(`/${parsed.data.locale}/games/${parsed.data.gameId}`);
+  return { success: true, error: null };
 }

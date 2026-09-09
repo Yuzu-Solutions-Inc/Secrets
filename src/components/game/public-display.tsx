@@ -296,7 +296,10 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
   const playersSig = useMemo(
     () =>
       players
-        .map((p) => `${String(p.id)}:${String(p.display_name ?? "")}:${Number(p.balance ?? 0)}:${p.secret_revealed ? 1 : 0}`)
+        .map(
+          (p) =>
+            `${String(p.id)}:${String(p.display_name ?? "")}:${Number(p.balance ?? 0)}:${p.secret_revealed ? 1 : 0}:${p.avatar_path ? 1 : 0}`,
+        )
         .sort()
         .join("|"),
     [players],
@@ -327,34 +330,40 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
     () => (
       <div
         key={safePage}
-        className="secrets-cards-page grid content-start gap-[clamp(.5rem,1.2vw,1rem)] overflow-y-auto"
+        className="secrets-cards-page grid content-start gap-[clamp(.6rem,1.3vw,1.1rem)] overflow-y-auto"
         style={{
-          // Cards have a real min and max width and a capped height — they don't
-          // stretch to consume empty space when there are only a few players.
-          gridTemplateColumns: "repeat(auto-fill, minmax(clamp(180px, 20vw, 300px), 1fr))",
-          gridAutoRows: "minmax(clamp(96px, 13vh, 150px), auto)",
+          // Fixed-width cards (not `1fr`) so a table of 2 players reads the same
+          // as a table of 9: uniform tiles, centred as a group, never stretched
+          // across the whole board with dead space stranded on one side.
+          gridTemplateColumns: "repeat(auto-fill, clamp(190px, 20vw, 260px))",
+          gridAutoRows: "minmax(clamp(90px, 12vh, 132px), auto)",
+          justifyContent: "center",
         }}
       >
         {pagePlayers.map((player) => {
           const revealed = Boolean(player.secret_revealed);
+          const name = String(player.display_name ?? "Player");
           return (
             <div
               key={String(player.id)}
-              className={`flex flex-col justify-center rounded-[18px] px-[clamp(.75rem,1.4vw,1.25rem)] py-[clamp(.6rem,1.1vw,1rem)] ${revealed ? "bg-violet-100 ring-2 ring-violet-500" : "bg-pink-50"}`}
+              className={`flex flex-col justify-center gap-[clamp(.3rem,.7vw,.55rem)] rounded-[18px] px-[clamp(.8rem,1.4vw,1.2rem)] py-[clamp(.65rem,1.1vw,1rem)] ${
+                revealed ? "bg-violet-100 ring-2 ring-violet-500" : "bg-pink-50 ring-1 ring-pink-100"
+              }`}
             >
-              <div className="flex items-center gap-[clamp(.5rem,1vw,.85rem)]">
+              <div className="flex items-center gap-[clamp(.5rem,1vw,.8rem)]">
                 <BoardAvatar
+                  hasAvatar={Boolean(player.avatar_path)}
                   src={`/api/assets/avatar/public/${code}/${String(player.id)}`}
-                  name={String(player.display_name ?? "?")}
+                  name={name}
                   revealed={revealed}
                 />
-                <p className="truncate text-[clamp(.95rem,1.5vw,1.4rem)] font-black">{String(player.display_name ?? "Player")}</p>
+                <p className="min-w-0 flex-1 truncate text-[clamp(.95rem,1.5vw,1.35rem)] font-black leading-tight">{name}</p>
               </div>
-              <p className={`display mt-[clamp(.35rem,.8vw,.6rem)] text-[clamp(1.2rem,2.1vw,1.9rem)] font-black leading-none ${revealed ? "text-violet-800" : "text-pink-700"}`}>
+              <p className={`display text-[clamp(1.2rem,2.1vw,1.9rem)] font-black leading-none ${revealed ? "text-violet-800" : "text-pink-700"}`}>
                 {formatMoney(Number(player.balance ?? 0), String(game.currency_symbol))}
               </p>
               {revealed ? (
-                <p className="secrets-reveal-badge mt-[clamp(.35rem,.8vw,.6rem)] inline-flex w-fit items-center gap-[6px] rounded-full bg-violet-600 px-[10px] py-[3px] text-[clamp(.6rem,.9vw,.78rem)] font-black uppercase tracking-widest text-white">
+                <p className="secrets-reveal-badge inline-flex w-fit items-center gap-[6px] rounded-full bg-violet-600 px-[10px] py-[3px] text-[clamp(.6rem,.9vw,.78rem)] font-black uppercase tracking-widest text-white">
                   <Unlock size={12} /> {t("secretOut")}
                 </p>
               ) : null}
@@ -598,17 +607,40 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
   );
 }
 
-// Player photo on the balances board; falls back to the gradient initial circle
-// when there is no avatar or it fails to load.
-function BoardAvatar({ src, name, revealed }: { src: string; name: string; revealed: boolean }) {
+// Up-to-two-letter initials from a display name: "Mia" -> "MI", "Ada Lovelace"
+// -> "AL". Used when a player has no profile photo.
+function initialsFrom(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// Player photo on the balances board. Renders the gradient initials circle
+// straight away when the player has no avatar on file (no broken-image flash),
+// and also falls back to it if the photo fails to load.
+function BoardAvatar({
+  hasAvatar,
+  src,
+  name,
+  revealed,
+}: {
+  hasAvatar: boolean;
+  src: string;
+  name: string;
+  revealed: boolean;
+}) {
   const [failed, setFailed] = useState(false);
   const base =
-    "size-[clamp(30px,3vw,44px)] shrink-0 rounded-full " +
+    "size-[clamp(34px,3.2vw,48px)] shrink-0 rounded-full " +
     (revealed ? "bg-gradient-to-br from-violet-500 to-fuchsia-700" : "bg-gradient-to-br from-pink-400 to-violet-600");
-  if (failed) {
+  if (!hasAvatar || failed) {
     return (
-      <span className={`grid place-items-center ${base} text-[clamp(.85rem,1.4vw,1.15rem)] font-black text-white`}>
-        {name.slice(0, 1)}
+      <span
+        className={`grid place-items-center ${base} text-[clamp(.8rem,1.3vw,1.1rem)] font-black uppercase leading-none text-white`}
+        aria-hidden="true"
+      >
+        {initialsFrom(name)}
       </span>
     );
   }

@@ -67,7 +67,9 @@
     "custom": "Custom",
     "templateNote": "The format sets the economy and the round schedule. You can fine-tune everything later in the game's Settings tab.",
     "secretCategory": "Secret pack",
-    "secretCategoryHint": "Players with no secret of their own are given one from this pack, so a quick game can start right away."
+    "secretCategoryHint": "Players with no secret of their own are given one from this pack, so a quick game can start right away.",
+    "houseSecret": "Activate House Secret",
+    "houseSecretHint": "A game-wide mystery only the host seeds. Players crack it from clues the host releases at random — clues are never for sale. Editable later in Settings."
   },
   "play": {
     "wallet": "My wallet",
@@ -81,7 +83,12 @@
     "buyHint": "Hint buzz",
     "waiting": "Waiting for the host",
     "share": "Share",
-    "steal": "Steal"
+    "steal": "Steal",
+    "accuseHouse": "Accuse the House",
+    "accuseHouseCta": "Submit theory",
+    "houseClosed": "The House can only be accused during the House Secret round.",
+    "houseTheoryPlaceholder": "Your theory on the House Secret…",
+    "houseTheorySubmitted": "Theory sent to the host."
   },
   "host": {
     "control": "Control room",

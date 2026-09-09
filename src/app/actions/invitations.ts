@@ -26,15 +26,16 @@ export async function addToWhitelist(
   if (!user) return { error: "unauthorized" };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("game_whitelist").upsert(
-    {
-      game_id: parsed.data.gameId,
-      email: normalizeEmail(parsed.data.email),
-      added_by: user.id,
-    },
-    { onConflict: "game_id,email", ignoreDuplicates: true },
-  );
-  if (error) return { error: error.message };
+  // The list's uniqueness is enforced by an *expression* index
+  // (game_id, lower(email)), which PostgREST's `onConflict=` cannot name — so we
+  // plain-insert and treat a unique violation as "already on the list", the same
+  // no-op the previous `ignoreDuplicates` upsert produced.
+  const { error } = await supabase.from("game_whitelist").insert({
+    game_id: parsed.data.gameId,
+    email: normalizeEmail(parsed.data.email),
+    added_by: user.id,
+  });
+  if (error && error.code !== "23505") return { error: error.message };
   revalidatePath(`/${parsed.data.locale}/games/${parsed.data.gameId}/host`);
   return {};
 }

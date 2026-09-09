@@ -67,7 +67,9 @@
     "custom": "Sur mesure",
     "templateNote": "Le format définit l’économie et le calendrier des manches. Vous pourrez tout ajuster ensuite dans l’onglet Réglages de la partie.",
     "secretCategory": "Pack de secrets",
-    "secretCategoryHint": "Les joueurs sans secret en reçoivent un tiré de ce pack, pour qu’une partie rapide démarre tout de suite."
+    "secretCategoryHint": "Les joueurs sans secret en reçoivent un tiré de ce pack, pour qu’une partie rapide démarre tout de suite.",
+    "houseSecret": "Activer le Secret de la maison",
+    "houseSecretHint": "Un mystère commun à toute la partie, préparé par l’hôte seul. Les joueurs le percent grâce aux indices que l’hôte révèle au hasard — ces indices ne sont jamais à vendre. Modifiable ensuite dans les Réglages."
   },
   "play": {
     "wallet": "Ma cagnotte",
@@ -81,7 +83,12 @@
     "buyHint": "Buzz indice",
     "waiting": "En attente de l’animateur",
     "share": "Partager",
-    "steal": "Voler"
+    "steal": "Voler",
+    "accuseHouse": "Accuser la maison",
+    "accuseHouseCta": "Envoyer la théorie",
+    "houseClosed": "La maison ne peut être accusée que pendant la manche Secret de la maison.",
+    "houseTheoryPlaceholder": "Votre théorie sur le secret de la maison…",
+    "houseTheorySubmitted": "Théorie envoyée à l’animateur."
   },
   "host": {
     "control": "Régie",
