@@ -343,6 +343,9 @@ export const missions = pgTable("missions", {
   penalty: bigint("penalty", { mode: "number" }).notNull().default(0),
   status: missionStatus("status").notNull().default("draft"),
   deadline: timestamp("deadline", { withTimezone: true }),
+  // Set when the host starts a prepared draft mission. Null while it is still
+  // hidden from players.
+  startedAt: timestamp("started_at", { withTimezone: true }),
   createdAt: timestamps.createdAt,
 });
 
@@ -352,6 +355,9 @@ export const missionAssignments = pgTable("mission_assignments", {
   playerId: uuid("player_id").references(() => gamePlayers.id, { onDelete: "cascade" }),
   teamId: uuid("team_id").references(() => teams.id, { onDelete: "cascade" }),
   submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  // Set when the assigned player (or a teammate) first opens the started
+  // mission. Drives the "new mission" indicator on the player's phone.
+  seenAt: timestamp("seen_at", { withTimezone: true }),
   evidencePath: text("evidence_path"),
   validatorComment: text("validator_comment"),
 }, (table) => [

@@ -29,7 +29,6 @@ export default async function HostPage({
     { data: buzzes },
     { data: missions },
     { data: events },
-    { data: audit },
     { data: secrets },
     { data: houseSecret },
     { data: teams },
@@ -40,11 +39,10 @@ export default async function HostPage({
     supabase.from("accusation_buzzes").select("*,accuser:game_players!accuser_player_id(profiles(display_name)),target:game_players!target_player_id(profiles(display_name))").eq("game_id", id).order("created_at", { ascending: false }),
     supabase.from("missions").select("*,mission_assignments(id,player_id,submitted_at,game_players(profiles(display_name)))").eq("game_id", id).order("created_at", { ascending: false }),
     supabase.from("game_events").select("*").eq("game_id", id).order("created_at", { ascending: false }).limit(20),
-    supabase.from("audit_events").select("*").eq("game_id", id).order("created_at", { ascending: false }).limit(30),
     supabase.from("secrets").select("*,secret_holders(player_id,game_players(id,profiles(display_name))),hints(id,kind,text,position,default_price,released_at)").eq("game_id", id),
     supabase.from("house_secrets").select("*,house_secret_clues(*)").eq("game_id", id).maybeSingle(),
     supabase.from("teams").select("*,game_rounds!inner(game_id,title),team_members(player_id,game_players(profiles(display_name))),wallets(balance)").eq("game_rounds.game_id", id),
-    supabase.from("ledger_transactions").select("id,type,description,created_at,reversed_transaction_id").eq("game_id", id).order("created_at", { ascending: false }).limit(30),
+    supabase.from("ledger_transactions").select("id,type,description,created_at,reversed_transaction_id,ledger_entries(amount,wallets(kind,game_players(profiles(display_name)),teams(name)))").eq("game_id", id).order("created_at", { ascending: false }).limit(30),
   ]);
 
   return (
@@ -56,7 +54,6 @@ export default async function HostPage({
       buzzes={buzzes ?? []}
       missions={missions ?? []}
       events={events ?? []}
-      audit={audit ?? []}
       secrets={secrets ?? []}
       houseSecret={houseSecret}
       teams={teams ?? []}

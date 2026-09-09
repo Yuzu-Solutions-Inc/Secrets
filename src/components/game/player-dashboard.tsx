@@ -32,7 +32,7 @@ import {
   revealMySecret,
   submitSecret,
   submitMission,
-  submitHouseTheory,
+  markMissionSeen,
   stageAccusationBuzz,
 } from "@/app/actions/game";
 import { castVote } from "@/app/actions/admin";
@@ -133,6 +133,7 @@ export function PlayerDashboard(props: Props) {
   );
 
   const [vaultOpen, setVaultOpen] = useState(false);
+  const [ackedMissionIds, setAckedMissionIds] = useState<string[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
   const [revealArmed, setRevealArmed] = useState(false);
@@ -206,6 +207,31 @@ export function PlayerDashboard(props: Props) {
   }
 
   const mission = props.missions[0]?.missions as Record<string, unknown> | undefined;
+
+  // A mission the host has started that this player has not opened yet. Drives
+  // the "new mission" indicator; acknowledging it also writes seen_at so the
+  // dot does not reappear on the player's other devices.
+  const unseenMissionIds = props.missions
+    .filter((row) => {
+      const m = row.missions as Record<string, unknown> | undefined;
+      return m?.status === "offered" && !row.submitted_at && !row.seen_at;
+    })
+    .map((row) => String((row.missions as Record<string, unknown>).id));
+  const showMissionAlert = unseenMissionIds.some((id) => !ackedMissionIds.includes(id));
+
+  function ackMissions() {
+    if (!unseenMissionIds.length) return;
+    setAckedMissionIds((prev) => Array.from(new Set([...prev, ...unseenMissionIds])));
+    for (const id of unseenMissionIds) {
+      const data = new FormData();
+      data.set("locale", props.locale);
+      data.set("gameId", props.game.id);
+      data.set("missionId", id);
+      data.set("playerId", props.playerId);
+      void markMissionSeen(data);
+    }
+  }
+
   const team = props.teamMember?.teams as Record<string, unknown> | undefined;
   const isTeamRound = props.round?.kind === "team";
   const modalError = modal === "accuse" ? buzzState.error : modal === "hint" ? hintState.error : null;
@@ -233,36 +259,55 @@ export function PlayerDashboard(props: Props) {
   return (
     <section className="mx-auto max-w-3xl pb-24">
       {/* 1. Player profile */}
-      <article className="bubble-card flex items-center gap-4 p-4">
-        <Avatar userId={props.currentUserId} name={me?.profiles?.display_name ?? null} size={64} />
+      <article className="bubble-card flex items-center gap-4 p-5">
+        <Avatar userId={props.currentUserId} name={me?.profiles?.display_name ?? null} size={56} />
         <div className="min-w-0">
-          <h1 className="display truncate text-2xl font-black">{me?.profiles?.display_name ?? "You"}</h1>
-          <p className="font-mono text-xs font-black tracking-widest text-pink-600">
+          <h1 className="display truncate text-2xl font-black leading-tight">{me?.profiles?.display_name ?? "You"}</h1>
+          <p className="mt-0.5 font-mono text-xs font-black uppercase tracking-widest text-pink-600">
             #{props.game.public_code} · {props.game.status.replaceAll("_", " ")}
           </p>
         </div>
       </article>
 
+      {/* New mission from the host */}
+      {showMissionAlert ? (
+        <button
+          type="button"
+          onClick={() => {
+            setVaultOpen(true);
+            ackMissions();
+          }}
+          className="mt-4 flex w-full items-center gap-3 rounded-3xl bg-pink-600 p-4 text-left font-black text-white shadow-lg shadow-pink-500/25"
+        >
+          <span className="relative flex h-3 w-3 shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-white" />
+          </span>
+          <Zap /> {t("newMission")}
+        </button>
+      ) : null}
+
       {/* 2. Money */}
-      <article className="bubble-card mt-4 bg-gradient-to-br from-pink-500 to-fuchsia-700 p-5 text-white">
-        <Coins size={20} />
-        <p className="mt-4 text-sm font-bold">{t("wallet")}</p>
-        <p className="display text-4xl font-black">{formatMoney(props.balance, props.game.currency_symbol)}</p>
+      <article className="mt-4 rounded-[var(--radius)] bg-gradient-to-br from-pink-500 to-fuchsia-700 p-5 text-white shadow-[var(--shadow)]">
+        <p className="flex items-center gap-2 text-sm font-bold text-white/90">
+          <Coins size={18} /> {t("wallet")}
+        </p>
+        <p className="display mt-1 text-4xl font-black tabular-nums">{formatMoney(props.balance, props.game.currency_symbol)}</p>
       </article>
 
       {/* 3. Buzz buttons */}
       <div className="mt-4 grid grid-cols-2 gap-3">
         <button
           onClick={() => setModal("accuse")}
-          className="min-h-28 rounded-3xl bg-red-500 p-4 text-left font-black text-white shadow-lg shadow-red-200"
+          className="flex min-h-24 flex-col justify-between gap-3 rounded-3xl bg-red-500 p-4 text-left text-base font-black text-white shadow-lg shadow-red-500/25"
         >
-          <Megaphone className="mb-4" /> {t("accuse")}
+          <Megaphone size={22} /> <span>{t("accuse")}</span>
         </button>
         <button
           onClick={() => setModal("hint")}
-          className="min-h-28 rounded-3xl bg-amber-300 p-4 text-left font-black text-amber-950 shadow-lg shadow-amber-100"
+          className="flex min-h-24 flex-col justify-between gap-3 rounded-3xl bg-amber-300 p-4 text-left text-base font-black text-amber-950 shadow-lg shadow-amber-500/25"
         >
-          <Lightbulb className="mb-4" /> {t("buyHint")}
+          <Lightbulb size={22} /> <span>{t("buyHint")}</span>
         </button>
       </div>
 
@@ -270,10 +315,16 @@ export function PlayerDashboard(props: Props) {
       <article className="bubble-card mt-4 p-5">
         <button
           type="button"
-          onClick={() => setVaultOpen((open) => !open)}
+          onClick={() => {
+            if (!vaultOpen) ackMissions();
+            setVaultOpen((open) => !open);
+          }}
           className="flex w-full items-center justify-between gap-2 font-black"
         >
-          <span className="flex items-center gap-2 text-lg"><Lock className="text-violet-600" /> Vault</span>
+          <span className="flex items-center gap-2 text-lg">
+            <Lock className="text-violet-600" /> Vault
+            {showMissionAlert ? <span className="h-2.5 w-2.5 rounded-full bg-pink-600" /> : null}
+          </span>
           <span className="text-xs font-bold text-[var(--muted)]">{vaultOpen ? "Close" : "Open"}</span>
         </button>
 
@@ -309,7 +360,7 @@ export function PlayerDashboard(props: Props) {
                       key={player.id}
                       type="button"
                       onClick={() => setSelected(player.id)}
-                      className="flex flex-col items-center gap-2 rounded-3xl bg-white p-3 text-center shadow-sm"
+                      className="flex flex-col items-center gap-2 rounded-2xl border border-pink-100 bg-white p-3 text-center"
                     >
                       <Avatar userId={player.user_id} name={player.name} size={56} />
                       <p className="w-full truncate text-sm font-black">{player.name ?? "Player"}</p>
@@ -445,18 +496,6 @@ export function PlayerDashboard(props: Props) {
                 <p className="mt-2 text-sm text-[var(--muted)]">No fragments released yet.</p>
               )}
             </div>
-
-            {props.houseSecret ? (
-              <form action={submitHouseTheory} className="space-y-2">
-                <input type="hidden" name="locale" value={props.locale} />
-                <input type="hidden" name="gameId" value={props.game.id} />
-                <input type="hidden" name="houseSecretId" value={String(props.houseSecret.id)} />
-                <input type="hidden" name="playerId" value={props.playerId} />
-                <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Submit a theory</p>
-                <textarea className="field min-h-24" name="theory" required placeholder="My House Secret theory…" />
-                <button className="pill pill-secondary w-full">Submit theory</button>
-              </form>
-            ) : null}
 
             {vault?.house ? (
               <div>
@@ -717,7 +756,7 @@ function MyGame(props: MyGameProps) {
 
       {/* Secret ballot */}
       {showBallot && props.round ? (
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-pink-100 bg-white p-4">
           <div className="flex items-center gap-2 font-black"><Users className="text-pink-600" /> Secret ballot</div>
           <form action={castVote} className="mt-3 space-y-2">
             <input type="hidden" name="locale" value={props.locale} />
@@ -768,10 +807,20 @@ function MyGame(props: MyGameProps) {
 
       {/* Mission */}
       {mission ? (
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-pink-100 bg-white p-4">
           <div className="flex items-center gap-2 font-black"><Zap className="text-pink-600" /> {t("mission")}</div>
           <h3 className="display mt-3 text-xl font-black">{String(mission.title)}</h3>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{String(mission.instructions)}</p>
+          <p className="mt-3 text-sm font-black">
+            <span className="text-emerald-600">
+              +{formatMoney(Number(mission.reward), props.game.currency_symbol)} if the host approves it
+            </span>
+            {Number(mission.penalty) > 0 ? (
+              <span className="mt-1 block text-red-600">
+                −{formatMoney(Number(mission.penalty), props.game.currency_symbol)} if it fails
+              </span>
+            ) : null}
+          </p>
           <form action={submitMission} className="mt-3">
             <input type="hidden" name="locale" value={props.locale} />
             <input type="hidden" name="gameId" value={props.game.id} />
@@ -784,7 +833,7 @@ function MyGame(props: MyGameProps) {
 
       {/* Team */}
       {isTeamRound ? (
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-pink-100 bg-white p-4">
           <div className="flex items-center gap-2 font-black"><Users className="text-violet-600" /> {t("team")}</div>
           <h3 className="display mt-3 text-xl font-black">{team ? String(team.name) : "Not assigned yet"}</h3>
           {team && !props.teamMember?.dilemma_choice ? (
@@ -808,7 +857,7 @@ function MyGame(props: MyGameProps) {
 
       {/* My hint inventory */}
       {props.hints.length ? (
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-pink-100 bg-white p-4">
           <div className="flex items-center gap-2 font-black"><Lightbulb className="text-amber-500" /> {t("hints")}</div>
           <div className="mt-3 space-y-3">
             {props.hints.map((grant) => {
@@ -860,7 +909,7 @@ function MyGame(props: MyGameProps) {
 
       {/* Hint offers to me */}
       {props.hintOffers.length ? (
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-pink-100 bg-white p-4">
           <div className="flex items-center gap-2 font-black"><Coins className="text-pink-600" /> Hint offers</div>
           <div className="mt-3 space-y-2">
             {props.hintOffers.map((offer) => {
