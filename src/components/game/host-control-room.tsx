@@ -25,6 +25,8 @@ import { adjudicateBuzz, hostTransition, stageAccusationBuzz } from "@/app/actio
 import {
   addHint,
   addImageHint,
+  editHint,
+  deleteHint,
   addHouseClue,
   addSecretHolder,
   assignPower,
@@ -103,6 +105,12 @@ export function HostControlRoom({
   }, [game.id, router]);
 
   const currentRound = rounds.find((round) => round.id === game.current_round_id);
+  // Every hint is sold at the same price — the one set in the base game
+  // settings (`hintPrice` in the round config). Show it here so the host
+  // isn't asked to price hints one by one.
+  const hintPriceRound = (currentRound ?? rounds[0]) as Row | undefined;
+  const hintPriceConfig = hintPriceRound?.config as Row | undefined;
+  const hintPrice = Number(hintPriceConfig?.hintPrice ?? 0);
   const pendingBuzzes = buzzes.filter((buzz) => !["correct", "partial", "wrong", "cancelled", "retracted"].includes(String(buzz.status)));
   const tabs = [
     ["players", t("players"), Users],
@@ -318,7 +326,37 @@ export function HostControlRoom({
                     <span className="rounded-full bg-pink-50 px-3 py-1 text-xs font-black">{String(secret.status)}</span>
                   </div>
                   <p className="display mt-3 text-2xl font-black">{String(secret.value)}</p>
-                  <p className="mt-2 text-sm text-[var(--muted)]">{hintRows?.length ?? 0} hints</p>
+                  <div className="mt-3 flex items-center justify-between gap-2 text-sm text-[var(--muted)]">
+                    <span className="inline-flex items-center gap-1.5"><Lightbulb className="size-4" />{hintRows?.length ?? 0} hints</span>
+                    <span>Each costs {formatMoney(hintPrice, String(game.currency_symbol))} · set in game settings</span>
+                  </div>
+                  {hintRows?.length ? (
+                    <ul className="mt-3 space-y-2">
+                      {[...hintRows]
+                        .sort((a, b) => Number(a.position) - Number(b.position))
+                        .map((hint) => (
+                          <li key={String(hint.id)} className="rounded-2xl bg-pink-50/60 p-3">
+                            {String(hint.kind) === "text" ? (
+                              <form action={editHint} className="flex flex-wrap items-center gap-2">
+                                <input type="hidden" name="locale" value={locale} />
+                                <input type="hidden" name="gameId" value={String(game.id)} />
+                                <input type="hidden" name="hintId" value={String(hint.id)} />
+                                <input className="field min-w-0 flex-1" name="text" defaultValue={String(hint.text ?? "")} required />
+                                <button className="pill pill-secondary shrink-0">Save</button>
+                              </form>
+                            ) : (
+                              <p className="text-sm font-bold">Image hint</p>
+                            )}
+                            <form action={deleteHint} className="mt-2">
+                              <input type="hidden" name="locale" value={locale} />
+                              <input type="hidden" name="gameId" value={String(game.id)} />
+                              <input type="hidden" name="hintId" value={String(hint.id)} />
+                              <button className="text-xs font-black text-red-600 hover:underline">Delete</button>
+                            </form>
+                          </li>
+                        ))}
+                    </ul>
+                  ) : null}
                   <form action={addSecretHolder} className="mt-3 flex gap-2">
                     <input type="hidden" name="locale" value={locale} />
                     <input type="hidden" name="gameId" value={String(game.id)} />
@@ -334,12 +372,11 @@ export function HostControlRoom({
                   </form>
                   <details className="mt-4">
                     <summary className="cursor-pointer font-bold">Add hint</summary>
-                    <form action={addHint} className="mt-3 grid gap-2 sm:grid-cols-[1fr_7rem_auto]">
+                    <form action={addHint} className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
                       <input type="hidden" name="locale" value={locale} />
                       <input type="hidden" name="gameId" value={String(game.id)} />
                       <input type="hidden" name="secretId" value={String(secret.id)} />
                       <input className="field" name="text" placeholder="A subtle clue…" required />
-                      <input className="field" name="price" type="number" min="0" defaultValue="1000" required />
                       <button className="pill pill-secondary">Add</button>
                     </form>
                   </details>
@@ -350,7 +387,6 @@ export function HostControlRoom({
                       <input type="hidden" name="gameId" value={String(game.id)} />
                       <input type="hidden" name="secretId" value={String(secret.id)} />
                       <input className="field" type="file" name="image" accept="image/png,image/jpeg,image/webp" required />
-                      <input className="field" name="price" type="number" min="0" defaultValue="1000" required />
                       <button className="pill pill-secondary w-full">Add image</button>
                     </form>
                   </details>
