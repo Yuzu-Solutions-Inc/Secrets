@@ -12,6 +12,7 @@ are the complete, authoritative history of the database:
 | `0001_mission_team_assignments.sql` | Mission/team assignment follow-up |
 | `0002_public_display_cues.sql` | Public display cue table |
 | `20260908034241_secrets_security_and_functions.sql` | RLS policies, `is_*` helpers, security-definer money/game functions, triggers, storage policies |
+| `20260909120000_fix_rls_recursion.sql` | Breaks the `secrets`/`hints`/`missions` policy recursion cycles with SECURITY DEFINER helpers (semantics unchanged) |
 
 `supabase/seed.sql` loads the built-in system round templates and is idempotent.
 
@@ -43,9 +44,6 @@ production grant/revoke state into a new migration. See
 
 `.github/workflows/ci.yml` starts a throwaway Postgres with
 `supabase db start` (which runs every migration plus the seed) and executes the
-pgTAP suites in `supabase/tests/` via `supabase test db`.
-
-The `db-tests` job is currently `continue-on-error: true`: the shipped RLS
-policies recurse on a direct authenticated `SELECT`, so both pgTAP suites fail
-today. See [`KNOWN_ISSUES.md`](./KNOWN_ISSUES.md). Once that is fixed, make the
-job blocking so a migration that breaks an RLS boundary fails CI.
+pgTAP suites in `supabase/tests/` via `supabase test db`. The `db-tests` job is
+blocking: a migration that does not apply cleanly, or that breaks an RLS
+boundary the suites assert, fails CI.
