@@ -106,9 +106,24 @@ npm run test:e2e
 npx supabase test db
 ```
 
-Unit coverage includes dilemma matrices, accusation economics, winner formulas, rounding and i18n parity. `supabase/tests/secrets_rls.sql` exercises Admin/Player knowledge boundaries.
+Unit coverage includes dilemma matrices, accusation economics, winner formulas, rounding and i18n parity. `supabase/tests/` exercises Admin/Player knowledge boundaries for secrets, hints, missions, dilemma choices, theory notes, House Secret theories, ballots and the money ledger.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request and on pushes to `main`:
+
+- **verify** — `npm run typecheck`, `npm test`, `npm run build`
+- **db-tests** — `supabase db start` (applies all migrations + seed) then `supabase test db` (pgTAP)
+- **e2e** — Playwright specs that do not need authentication, across phone, laptop and 16:9 viewports
+
+Merge through pull requests so these checks run; see [`docs/MIGRATIONS.md`](docs/MIGRATIONS.md) for the schema-change workflow.
 
 ## Deployment
+
+Vercel and Supabase for this project are managed on a separate partner-owned
+account. The full go-live checklist for that account — advisors, auth redirect
+URLs, environment variables, migration verification and a multi-session realtime
+rehearsal — is in [`docs/PRODUCTION_CHECKLIST.md`](docs/PRODUCTION_CHECKLIST.md).
 
 The intended free setup is one Supabase Free project and one personal Vercel Hobby project.
 
