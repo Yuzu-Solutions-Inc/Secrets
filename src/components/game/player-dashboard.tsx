@@ -25,6 +25,7 @@ import {
   buyHint,
   createHintOffer,
   setDilemmaChoice,
+  submitDilemmaChoice,
   savePlayerNote,
   saveHouseNote,
   shareHint,
@@ -112,6 +113,7 @@ type Props = {
   houseSecret: Record<string, unknown> | null;
   activeBuzzes: Array<Record<string, unknown>>;
   vault: Record<string, unknown> | null;
+  dilemmas?: Array<{ id: string; prompt: string; option1: string; option2: string; myChoice: string | null }>;
 };
 
 export function PlayerDashboard(props: Props) {
@@ -753,6 +755,30 @@ function MyGame(props: MyGameProps) {
           </>
         )}
       </div>
+
+      {/* Broadcast dilemmas — pick an option (item 14) */}
+      {(props.dilemmas ?? []).map((dilemma) => (
+        <div key={dilemma.id} className="rounded-2xl border border-pink-200 bg-white p-4">
+          <div className="flex items-center gap-2 font-black"><ShieldQuestion className="text-pink-600" /> {dilemma.prompt}</div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {(["option_1", "option_2"] as const).map((option) => {
+              const label = option === "option_1" ? dilemma.option1 : dilemma.option2;
+              const chosen = dilemma.myChoice === option;
+              return (
+                <form key={option} action={submitDilemmaChoice}>
+                  <input type="hidden" name="locale" value={props.locale} />
+                  <input type="hidden" name="gameId" value={props.game.id} />
+                  <input type="hidden" name="eventId" value={dilemma.id} />
+                  <input type="hidden" name="playerId" value={props.playerId} />
+                  <input type="hidden" name="choice" value={option} />
+                  <button className={`pill w-full ${chosen ? "pill-primary" : "pill-secondary"}`}>{label}</button>
+                </form>
+              );
+            })}
+          </div>
+          {dilemma.myChoice ? <p className="mt-2 text-xs font-bold text-[var(--muted)]">Answer locked in — tap again to change it.</p> : null}
+        </div>
+      ))}
 
       {/* Secret ballot */}
       {showBallot && props.round ? (
