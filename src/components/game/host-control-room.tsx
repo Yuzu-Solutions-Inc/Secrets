@@ -101,6 +101,7 @@ export function HostControlRoom({
   const [secretQuery, setSecretQuery] = useState("");
   const [secretFilter, setSecretFilter] = useState("all");
   const [openSecrets, setOpenSecrets] = useState<Set<string>>(new Set());
+  const [editingSecret, setEditingSecret] = useState<string | null>(null);
   const [openRound, setOpenRound] = useState<string | null>(null);
   const [broadcastType, setBroadcastType] = useState("announcement");
   const [finaleEntryMode, setFinaleEntryMode] = useState<string>(
@@ -113,6 +114,11 @@ export function HostControlRoom({
   // Once the game has started, the invite panel is replaced by the host's
   // money-correction tools (item 11).
   const gameStarted = ["live", "finale", "completed", "archived"].includes(String(game.status));
+
+  // Secrets lock/unlock pill. The host can flip it freely until round 1 starts
+  // (the game leaves the pre-live statuses); after that the lock is permanent.
+  const secretsLocked = !["draft", "secret_submission"].includes(String(game.status));
+  const canToggleSecrets = ["draft", "secret_submission", "locked"].includes(String(game.status));
 
   // 1s clock for the run-of-show timer.
   const [now, setNow] = useState(() => Date.now());
@@ -159,7 +165,6 @@ export function HostControlRoom({
     ["buzzes", t("buzzes"), Megaphone],
     ["missions", t("missions"), Sparkles],
     ["broadcast", t("broadcast"), Megaphone],
-    ["votes", t("finale"), Vote],
     ["settings", t("settings"), SlidersHorizontal],
   ] as const;
 
@@ -224,12 +229,13 @@ export function HostControlRoom({
                 <button className="pill pill-primary"><CirclePlay size={18} /> {t("nextRound")}</button>
               </form>
             </div>
-            <form action={hostTransition} className="shrink-0">
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="gameId" value={String(game.id)} />
-              <input type="hidden" name="action" value="lock_secrets" />
-              <button className="pill pill-secondary"><Eye size={18} /> {t("lock")}</button>
-            </form>
+            <SecretsLockPill
+              locale={locale}
+              gameId={String(game.id)}
+              locked={secretsLocked}
+              canToggle={canToggleSecrets}
+              className="shrink-0"
+            />
           </div>
         );
       })()}
@@ -630,13 +636,17 @@ export function HostControlRoom({
                 <button type="button" className="pill pill-secondary h-10" onClick={() => setOpenSecrets(allOpen ? new Set() : new Set(allIds))}>
                   {allOpen ? "Collapse all" : "Expand all"}
                 </button>
-                <form action={hostTransition} className="ml-auto">
-                  <input type="hidden" name="locale" value={locale} />
-                  <input type="hidden" name="gameId" value={String(game.id)} />
-                  <input type="hidden" name="action" value="lock_secrets" />
-                  <button className="pill pill-secondary h-10"><Eye size={16} /> Lock all secrets</button>
-                </form>
-                <span className="text-xs font-bold text-[var(--muted)]">{lockedCount}/{secrets.length} locked</span>
+                <SecretsLockPill
+                  locale={locale}
+                  gameId={String(game.id)}
+                  locked={secretsLocked}
+                  canToggle={canToggleSecrets}
+                  className="ml-auto h-10"
+                />
+                <span className="text-xs font-bold text-[var(--muted)]">
+                  {lockedCount}/{secrets.length} locked
+                  {canToggleSecrets ? "" : " · locked for the game"}
+                </span>
               </div>
 
               <details className="bubble-card overflow-hidden" open={!houseSecret}>
@@ -693,19 +703,40 @@ export function HostControlRoom({
                           {open ? "−" : "+"}
                         </button>
                         <span className="grid size-9 shrink-0 place-items-center rounded-full bg-pink-100 text-sm font-black text-pink-700">{name.slice(0, 1).toUpperCase()}</span>
-                        {isDraft && holderPlayerId ? (
-                          <form action={editSecret} className="flex min-w-0 flex-1 items-center gap-2">
+                        {editingSecret === sid ? (
+                          <form
+                            action={isDraft && holderPlayerId ? editSecret : replaceSecret}
+                            className="flex min-w-0 flex-1 items-center gap-2"
+                          >
                             <input type="hidden" name="locale" value={locale} />
                             <input type="hidden" name="gameId" value={String(game.id)} />
-                            <input type="hidden" name="playerId" value={holderPlayerId} />
+                            {isDraft && holderPlayerId ? (
+                              <input type="hidden" name="playerId" value={holderPlayerId} />
+                            ) : (
+                              <>
+                                <input type="hidden" name="secretId" value={sid} />
+                                <input type="hidden" name="reason" value="Host edit" />
+                              </>
+                            )}
                             <span className="hidden shrink-0 text-xs font-bold text-pink-600 md:block">{name}</span>
-                            <input className="field h-9 min-w-0 flex-1" name="value" defaultValue={String(secret.value)} required />
+                            <input className="field h-9 min-w-0 flex-1" name="value" defaultValue={String(secret.value)} required autoFocus />
                             <button className="pill pill-secondary h-9 shrink-0 text-xs">Save</button>
+                            <button type="button" onClick={() => setEditingSecret(null)} className="pill h-9 shrink-0 text-xs">Cancel</button>
                           </form>
                         ) : (
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-bold text-pink-600">{name}</p>
-                            <p className="display truncate font-black">{String(secret.value)}</p>
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-bold text-pink-600">{name}</p>
+                              <p className="display truncate font-black">{String(secret.value)}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setEditingSecret(sid)}
+                              className="grid size-8 shrink-0 place-items-center rounded-full text-pink-600 hover:bg-pink-50 hover:text-pink-800"
+                              aria-label={`Edit ${name}'s secret`}
+                            >
+                              <Pencil size={15} />
+                            </button>
                           </div>
                         )}
                         <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-black ${status === "revealed" ? "bg-violet-100 text-violet-800" : status === "locked" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{status}</span>
@@ -753,32 +784,6 @@ export function HostControlRoom({
                             <p className="text-xs text-[var(--muted)] sm:col-span-2">Fill the text, attach an image, or both.</p>
                           </form>
 
-                          <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-                            <form action={addSecretHolder} className="flex gap-2">
-                              <input type="hidden" name="locale" value={locale} />
-                              <input type="hidden" name="gameId" value={String(game.id)} />
-                              <input type="hidden" name="secretId" value={sid} />
-                              <select className="field h-9 w-auto text-xs" name="playerId" required defaultValue="">
-                                <option value="" disabled>Add shared holder…</option>
-                                {players.map((player) => {
-                                  const p = player.profiles as Row | null;
-                                  return <option key={String(player.id)} value={String(player.id)}>{String(p?.display_name ?? "Player")}</option>;
-                                })}
-                              </select>
-                              <button className="pill pill-secondary h-9 shrink-0 text-xs">Add</button>
-                            </form>
-                            <details>
-                              <summary className="cursor-pointer text-xs font-bold text-red-600">Replace with audit</summary>
-                              <form action={replaceSecret} className="mt-2 space-y-2">
-                                <input type="hidden" name="locale" value={locale} />
-                                <input type="hidden" name="gameId" value={String(game.id)} />
-                                <input type="hidden" name="secretId" value={sid} />
-                                <textarea className="field min-h-20" name="value" required defaultValue={String(secret.value)} />
-                                <input className="field h-9" name="reason" required placeholder="Required audit reason" />
-                                <button className="pill h-9 bg-red-500 text-xs text-white">Replace</button>
-                              </form>
-                            </details>
-                          </div>
                         </div>
                       ) : null}
                     </div>
@@ -1067,8 +1072,64 @@ export function HostControlRoom({
           </div>
         ) : null}
 
-        {tab === "votes" ? (
-          <div className="space-y-3">
+        {tab === "settings" ? (
+          <div className="space-y-4">
+            <form action={updateGameSettings} className="bubble-card grid gap-4 p-6 sm:grid-cols-2">
+              <input type="hidden" name="locale" value={locale} />
+              <input type="hidden" name="gameId" value={String(game.id)} />
+              <div className="sm:col-span-2">
+                <SlidersHorizontal className="text-pink-600" />
+                <h2 className="display mt-3 text-3xl font-black">Game settings</h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">Economy is in whole {String(game.currency_symbol)}. Buzz and hint prices apply to every round.</p>
+              </div>
+              <label className="font-bold">Starting cash
+                <input className="field mt-1" name="startingCash" type="number" min="0" defaultValue={Math.round(Number(game.starting_cash ?? 0) / 100)} required />
+              </label>
+              <label className="font-bold">Accusation buzz cost
+                <input className="field mt-1" name="accusationStake" type="number" min="0" defaultValue={Math.round(settingsAccusationStake / 100)} required />
+              </label>
+              <label className="font-bold">Hint cost
+                <input className="field mt-1" name="hintPrice" type="number" min="0" defaultValue={Math.round(settingsHintPrice / 100)} required />
+              </label>
+              <label className="font-bold">Language
+                <select className="field mt-1" name="language" defaultValue={String(settings.language ?? locale)}>
+                  <option value="fr">Français</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+              <label className="font-bold">Start date &amp; time <span className="font-normal text-[var(--muted)]">(reminder only — the game never starts on its own)</span>
+                <input className="field mt-1" name="startsAt" type="datetime-local" defaultValue={startsAtLocal} />
+              </label>
+              <label className="font-bold">Location
+                <input className="field mt-1" name="location" defaultValue={String(settings.location ?? "")} placeholder="The Pink House, 12 Rose St." />
+              </label>
+              <label className="font-bold">Secret pack
+                <select className="field mt-1" name="secretCategory" defaultValue={String(settings.secretCategory ?? "mixed")}>
+                  {secretCategories.map((category) => (
+                    <option key={category.key} value={category.key}>{category.label[locale === "fr" ? "fr" : "en"]}</option>
+                  ))}
+                </select>
+              </label>
+              <button className="pill pill-primary sm:col-span-2">Save settings</button>
+            </form>
+
+            <form action={fillBankSecrets} className="bubble-card grid gap-2 p-6">
+              <h3 className="font-black">Auto-fill secrets</h3>
+              <p className="text-sm text-[var(--muted)]">Give every active player without a secret one from the chosen pack. Players can still change theirs while submission is open.</p>
+              <input type="hidden" name="locale" value={locale} />
+              <input type="hidden" name="gameId" value={String(game.id)} />
+              <button className="pill pill-secondary w-fit"><Sparkles size={16} /> Fill missing secrets</button>
+            </form>
+
+            <form action={uploadGameBackground} className="bubble-card grid gap-3 p-6">
+              <h3 className="font-black">Dashboard background image</h3>
+              <p className="text-sm text-[var(--muted)]">Shown behind the TV dashboard. PNG, JPEG or WebP.</p>
+              <input type="hidden" name="locale" value={locale} />
+              <input type="hidden" name="gameId" value={String(game.id)} />
+              <input className="field" type="file" name="image" accept="image/png,image/jpeg,image/webp" required />
+              <button className="pill pill-secondary w-fit">Upload background</button>
+            </form>
+
             <form action={saveFinaleConfig} className="bubble-card grid gap-4 p-6">
               <input type="hidden" name="locale" value={locale} />
               <input type="hidden" name="gameId" value={String(game.id)} />
@@ -1159,66 +1220,6 @@ export function HostControlRoom({
           </div>
         ) : null}
 
-        {tab === "settings" ? (
-          <div className="space-y-4">
-            <form action={updateGameSettings} className="bubble-card grid gap-4 p-6 sm:grid-cols-2">
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="gameId" value={String(game.id)} />
-              <div className="sm:col-span-2">
-                <SlidersHorizontal className="text-pink-600" />
-                <h2 className="display mt-3 text-3xl font-black">Game settings</h2>
-                <p className="mt-1 text-sm text-[var(--muted)]">Economy is in whole {String(game.currency_symbol)}. Buzz and hint prices apply to every round.</p>
-              </div>
-              <label className="font-bold">Starting cash
-                <input className="field mt-1" name="startingCash" type="number" min="0" defaultValue={Math.round(Number(game.starting_cash ?? 0) / 100)} required />
-              </label>
-              <label className="font-bold">Accusation buzz cost
-                <input className="field mt-1" name="accusationStake" type="number" min="0" defaultValue={Math.round(settingsAccusationStake / 100)} required />
-              </label>
-              <label className="font-bold">Hint cost
-                <input className="field mt-1" name="hintPrice" type="number" min="0" defaultValue={Math.round(settingsHintPrice / 100)} required />
-              </label>
-              <label className="font-bold">Language
-                <select className="field mt-1" name="language" defaultValue={String(settings.language ?? locale)}>
-                  <option value="fr">Français</option>
-                  <option value="en">English</option>
-                </select>
-              </label>
-              <label className="font-bold">Start date &amp; time <span className="font-normal text-[var(--muted)]">(reminder only — the game never starts on its own)</span>
-                <input className="field mt-1" name="startsAt" type="datetime-local" defaultValue={startsAtLocal} />
-              </label>
-              <label className="font-bold">Location
-                <input className="field mt-1" name="location" defaultValue={String(settings.location ?? "")} placeholder="The Pink House, 12 Rose St." />
-              </label>
-              <label className="font-bold">Secret pack
-                <select className="field mt-1" name="secretCategory" defaultValue={String(settings.secretCategory ?? "mixed")}>
-                  {secretCategories.map((category) => (
-                    <option key={category.key} value={category.key}>{category.label[locale === "fr" ? "fr" : "en"]}</option>
-                  ))}
-                </select>
-              </label>
-              <button className="pill pill-primary sm:col-span-2">Save settings</button>
-            </form>
-
-            <form action={fillBankSecrets} className="bubble-card grid gap-2 p-6">
-              <h3 className="font-black">Auto-fill secrets</h3>
-              <p className="text-sm text-[var(--muted)]">Give every active player without a secret one from the chosen pack. Players can still change theirs while submission is open.</p>
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="gameId" value={String(game.id)} />
-              <button className="pill pill-secondary w-fit"><Sparkles size={16} /> Fill missing secrets</button>
-            </form>
-
-            <form action={uploadGameBackground} className="bubble-card grid gap-3 p-6">
-              <h3 className="font-black">Dashboard background image</h3>
-              <p className="text-sm text-[var(--muted)]">Shown behind the TV dashboard. PNG, JPEG or WebP.</p>
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="gameId" value={String(game.id)} />
-              <input className="field" type="file" name="image" accept="image/png,image/jpeg,image/webp" required />
-              <button className="pill pill-secondary w-fit">Upload background</button>
-            </form>
-          </div>
-        ) : null}
-
       </div>
     </section>
   );
@@ -1254,6 +1255,42 @@ function playerTransactions(ledger: Row[], playerId: string) {
       amount,
     }];
   });
+}
+
+// The lock/unlock control for player secrets. While round 1 hasn't started the
+// host can flip it as often as they like; once the game is live the pill is
+// inert and just shows the closed padlock.
+function SecretsLockPill({
+  locale,
+  gameId,
+  locked,
+  canToggle,
+  className = "",
+}: {
+  locale: string;
+  gameId: string;
+  locked: boolean;
+  canToggle: boolean;
+  className?: string;
+}) {
+  const Icon = locked ? Lock : LockOpen;
+  if (!canToggle) {
+    return (
+      <span className={`pill pill-secondary opacity-70 ${className}`} title="Secrets are locked for the rest of the game">
+        <Icon size={16} /> Secrets
+      </span>
+    );
+  }
+  return (
+    <form action={hostTransition} className={className}>
+      <input type="hidden" name="locale" value={locale} />
+      <input type="hidden" name="gameId" value={gameId} />
+      <input type="hidden" name="action" value={locked ? "unlock_secrets" : "lock_secrets"} />
+      <button className={`pill ${locked ? "pill-primary" : "pill-secondary"}`} title={locked ? "Unlock secrets so players can edit them" : "Lock secrets"}>
+        <Icon size={16} /> Secrets
+      </button>
+    </form>
+  );
 }
 
 function Empty({ icon: Icon, text }: { icon: typeof Lightbulb; text: string }) {
