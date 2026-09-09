@@ -23,6 +23,16 @@ export default async function DisplayPage({
     players: Record<string, unknown>[];
     round: Record<string, unknown> | null;
     latest_event: Record<string, unknown> | null;
+    accusation: {
+      id: string;
+      theory: string;
+      stake: number;
+      status: string;
+      created_at: string;
+      accuser: string | null;
+      target: string | null;
+    } | null;
+    accusation_queue: number | null;
   };
   return (
     <PublicDisplay
@@ -31,6 +41,8 @@ export default async function DisplayPage({
       players={dashboard.players ?? []}
       round={dashboard.round}
       latestEvent={dashboard.latest_event}
+      accusation={dashboard.accusation ?? null}
+      accusationQueue={dashboard.accusation_queue ?? 0}
     />
   );
 }

@@ -18,7 +18,8 @@ import {
   Vote,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { adjudicateBuzz, hostTransition, stageAccusationBuzz } from "@/app/actions/game";
@@ -44,6 +45,7 @@ import {
   undoTransaction,
   validateMission,
 } from "@/app/actions/admin";
+import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
 import { InvitePlayerForm } from "./invite-player-form";
 
@@ -77,7 +79,32 @@ export function HostControlRoom({
   ledger: Row[];
 }) {
   const t = useTranslations("host");
+  const router = useRouter();
   const [tab, setTab] = useState("players");
+
+  // Keep the control room (buzz queue, balances, events) in lock-step with the
+  // TV and player dashboards via the shared display_cues refresh signal.
+  useEffect(() => {
+    const supabase = createClient();
+    let last = 0;
+    const channel = supabase
+      .channel(`host-refresh:${String(game.id)}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "display_cues", filter: `game_id=eq.${String(game.id)}` },
+        () => {
+          const ts = Date.now();
+          if (ts - last < 300) return;
+          last = ts;
+          router.refresh();
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [game.id, router]);
+
   const currentRound = rounds.find((round) => round.id === game.current_round_id);
   const pendingBuzzes = buzzes.filter((buzz) => !["correct", "partial", "wrong", "cancelled", "retracted"].includes(String(buzz.status)));
   const tabs = [

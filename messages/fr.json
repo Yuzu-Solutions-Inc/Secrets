@@ -95,6 +95,13 @@
     "round": "Manche en direct",
     "balances": "Cagnottes de la maison",
     "clue": "Nouvel indice",
-    "waiting": "Le prochain rebondissement arrive…"
+    "waiting": "Le prochain rebondissement arrive…",
+    "accusation": "Accusation",
+    "queue": "+{count} en file",
+    "awaitRuling": "Reste à l’écran jusqu’à la validation de l’hôte",
+    "sound": "Activer le son",
+    "onBuzzer": "Au buzzer",
+    "faceOff": "Confrontation",
+    "awaitingRuling": "En attente de la décision de l’hôte"
   }
 }
