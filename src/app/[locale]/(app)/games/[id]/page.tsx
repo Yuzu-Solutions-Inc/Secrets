@@ -45,7 +45,7 @@ export default async function GamePage({
     ]);
   if (!currentPlayer) notFound();
 
-  const [{ data: wallet }, { data: missions }, { data: hints }, { data: notes }, { data: teamMember }, { data: hintOffers }, { data: houseSecret }, { data: activeBuzzes }] =
+  const [{ data: wallet }, { data: missions }, { data: hints }, { data: notes }, { data: teamMember }, { data: hintOffers }, { data: houseSecret }, { data: activeBuzzes }, { data: vault }] =
     await Promise.all([
       supabase.from("wallets").select("id,balance").eq("player_id", currentPlayer.id).maybeSingle(),
       supabase
@@ -75,6 +75,7 @@ export default async function GamePage({
         .select("id,theory,stake,status,target:game_players!target_player_id(profiles(display_name))")
         .eq("accuser_player_id", currentPlayer.id)
         .in("status", ["pending", "confrontation", "confirmed"]),
+      supabase.rpc("player_vault", { p_game_id: id }),
     ]);
 
   return (
@@ -111,6 +112,7 @@ export default async function GamePage({
         hintOffers={hintOffers ?? []}
         houseSecret={houseSecret && typeof houseSecret === "object" ? houseSecret as Record<string, unknown> : null}
         activeBuzzes={activeBuzzes ?? []}
+        vault={vault && typeof vault === "object" ? vault as Record<string, unknown> : null}
       />
     </>
   );

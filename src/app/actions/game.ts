@@ -19,6 +19,20 @@ async function actor() {
   return user;
 }
 
+export type ActionState = { success: boolean; error: string | null };
+
+// Map named exceptions raised by the Postgres RPCs to something a player can
+// read. Anything unrecognised falls back to the supplied generic message
+// instead of surfacing the raw error digest / crash page.
+function friendlyRpcError(
+  message: string,
+  table: Record<string, string>,
+  fallback: string,
+): string {
+  const hit = Object.keys(table).find((code) => message.includes(code));
+  return hit ? table[hit] : fallback;
+}
+
 export type CreateOrganizationState = { error: string | null };
 
 export async function createOrganization(
@@ -142,21 +156,38 @@ export async function submitSecret(
   return { success: true, error: null };
 }
 
-export async function accusationBuzz(formData: FormData) {
+export async function accusationBuzz(
+  _prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
   const parsed = z.object({
     gameId: z.string().uuid(),
     targetPlayerId: z.string().uuid(),
     theory: z.string().trim().min(3).max(500),
     locale: localeSchema,
-  }).parse(Object.fromEntries(formData));
+  }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { success: false, error: "Pick a player and write a theory of 3 to 500 characters." };
+  }
   const supabase = await createClient();
   const { error } = await supabase.rpc("create_accusation_buzz", {
-    p_game_id: parsed.gameId,
-    p_target_player_id: parsed.targetPlayerId,
-    p_theory: parsed.theory,
+    p_game_id: parsed.data.gameId,
+    p_target_player_id: parsed.data.targetPlayerId,
+    p_theory: parsed.data.theory,
   });
-  if (error) throw new Error(error.message);
-  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+  if (error) {
+    return {
+      success: false,
+      error: friendlyRpcError(error.message, {
+        game_not_live: "Accusations open once the host starts a live round.",
+        invalid_target: "Choose a different player to accuse.",
+        insufficient_funds: "You can't cover the accusation stake right now.",
+        secret_revealed: "That player's secret is already out — no accusation needed.",
+      }, "Your accusation didn't go through. Please try again."),
+    };
+  }
+  revalidatePath(`/${parsed.data.locale}/games/${parsed.data.gameId}`);
+  return { success: true, error: null };
 }
 
 export async function stageAccusationBuzz(formData: FormData) {
@@ -176,19 +207,36 @@ export async function stageAccusationBuzz(formData: FormData) {
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}/host`, "page");
 }
 
-export async function buyHint(formData: FormData) {
+export async function buyHint(
+  _prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
   const parsed = z.object({
     gameId: z.string().uuid(),
     targetPlayerId: z.string().uuid(),
     locale: localeSchema,
-  }).parse(Object.fromEntries(formData));
+  }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { success: false, error: "Choose a player to buy a hint about." };
+  }
   const supabase = await createClient();
   const { error } = await supabase.rpc("buy_next_hint", {
-    p_game_id: parsed.gameId,
-    p_target_player_id: parsed.targetPlayerId,
+    p_game_id: parsed.data.gameId,
+    p_target_player_id: parsed.data.targetPlayerId,
   });
-  if (error) throw new Error(error.message);
-  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+  if (error) {
+    return {
+      success: false,
+      error: friendlyRpcError(error.message, {
+        game_not_live: "Hint buzzes open once the host starts a live round.",
+        invalid_target: "Choose a different player.",
+        insufficient_funds: "You can't cover the hint price right now.",
+        no_hints_left: "There are no more hints to buy about that player.",
+      }, "The hint buzz didn't go through. Please try again."),
+    };
+  }
+  revalidatePath(`/${parsed.data.locale}/games/${parsed.data.gameId}`);
+  return { success: true, error: null };
 }
 
 export async function setDilemmaChoice(formData: FormData) {
@@ -311,6 +359,51 @@ export async function saveTheoryNote(formData: FormData) {
     body: parsed.body,
   });
   if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+}
+
+// Fetches the caller's own secret text on demand. Kept off the page payload so
+// the value only travels after the deliberate reveal taps in the Vault.
+export async function revealMySecret(gameId: string): Promise<string | null> {
+  const id = z.string().uuid().parse(gameId);
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("my_secret", { p_game_id: id });
+  if (error) throw new Error(error.message);
+  return (data as string | null) ?? null;
+}
+
+// Upserts (or clears) the caller's private note about one other player.
+export async function savePlayerNote(formData: FormData) {
+  const parsed = z.object({
+    gameId: z.string().uuid(),
+    playerId: z.string().uuid(),
+    targetPlayerId: z.string().uuid(),
+    body: z.string().trim().max(3000),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  if (parsed.body.length === 0) {
+    const { error } = await supabase
+      .from("theory_notes")
+      .delete()
+      .eq("game_id", parsed.gameId)
+      .eq("player_id", parsed.playerId)
+      .eq("target_player_id", parsed.targetPlayerId);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase
+      .from("theory_notes")
+      .upsert(
+        {
+          game_id: parsed.gameId,
+          player_id: parsed.playerId,
+          target_player_id: parsed.targetPlayerId,
+          body: parsed.body,
+        },
+        { onConflict: "game_id,player_id,target_player_id" },
+      );
+    if (error) throw new Error(error.message);
+  }
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
 }
 
