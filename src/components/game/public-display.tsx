@@ -1,11 +1,17 @@
 "use client";
 
-import { Lightbulb, Maximize2, Megaphone, PartyPopper, ShieldQuestion, Siren, Sparkles, Timer, Unlock, Volume2, VolumeX, Zap } from "lucide-react";
+import { Clapperboard, Lightbulb, Maximize2, Megaphone, PartyPopper, ShieldQuestion, Siren, Sparkles, Timer, Unlock, Volume2, VolumeX, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
+import { GameShowOpening, type OpeningPlayer } from "./game-show-opening";
+
+// Statuses the game sits in before round 1 goes live. A move out of one of
+// these into a live status is the cue for the game-show cold open.
+const PRELIVE_STATUSES = new Set(["draft", "secret_submission", "locked"]);
+const isLiveStatus = (status: string) => status === "live" || status === "finale";
 
 type Row = Record<string, unknown>;
 
@@ -53,6 +59,7 @@ const EVENT_META: Record<string, { icon: typeof Megaphone; tint: string; label: 
 
 export function PublicDisplay({ code, initialData }: { locale: string; code: string; initialData: DashboardData }) {
   const t = useTranslations("display");
+  const tRoot = useTranslations();
   const [data, setData] = useState<DashboardData>(initialData);
   const [now, setNow] = useState<number | null>(null);
   const [soundOn, setSoundOn] = useState(true);
@@ -77,6 +84,56 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
   const accusationQueue = data.accusation_queue ?? 0;
   const verdict = data.verdict;
   const gameId = String(game.id);
+  const gameStatus = String(game.status ?? "");
+
+  // ---- game-show cold open --------------------------------------------------
+  // Fires once per game on this screen: either we watch the status flip out of
+  // a pre-live state, or the display is opened right after the host started and
+  // nothing has happened yet. A localStorage flag stops a refresh replaying it;
+  // the header button replays it on demand.
+  const [showOpening, setShowOpening] = useState(false);
+  const prevStatusRef = useRef<string | null>(null);
+  const autoOpeningDoneRef = useRef(false);
+
+  const openingPlayers = useMemo<OpeningPlayer[]>(
+    () =>
+      players.map((p) => ({
+        id: String(p.id),
+        name: String(p.display_name ?? "Player"),
+        hasAvatar: Boolean(p.avatar_path),
+        avatarSrc: `/api/assets/avatar/public/${code}/${String(p.id)}`,
+      })),
+    [players, code],
+  );
+
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = gameStatus;
+    if (autoOpeningDoneRef.current) return;
+
+    let alreadyShown = false;
+    try {
+      alreadyShown = window.localStorage.getItem(`secrets:intro:${gameId}`) === "1";
+    } catch {
+      /* private mode / storage disabled — fall through */
+    }
+    if (alreadyShown) {
+      autoOpeningDoneRef.current = true;
+      return;
+    }
+
+    const transitionedToLive = prev !== null && PRELIVE_STATUSES.has(prev) && isLiveStatus(gameStatus);
+    const freshStartOnLoad = prev === null && isLiveStatus(gameStatus) && recentEvents.length === 0;
+    if (!transitionedToLive && !freshStartOnLoad) return;
+
+    autoOpeningDoneRef.current = true;
+    try {
+      window.localStorage.setItem(`secrets:intro:${gameId}`, "1");
+    } catch {
+      /* ignore */
+    }
+    setShowOpening(true);
+  }, [gameStatus, gameId, recentEvents.length]);
 
   const supabase = useCallback(() => {
     if (!supabaseRef.current) supabaseRef.current = createClient();
@@ -383,6 +440,16 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
       className="fixed inset-0 flex flex-col overflow-hidden bg-[radial-gradient(circle_at_8%_5%,rgba(255,134,200,.34),transparent_28rem),radial-gradient(circle_at_92%_16%,rgba(190,140,255,.24),transparent_24rem),linear-gradient(160deg,var(--cream),var(--blush))] bg-cover bg-center text-[color:var(--ink)]"
       style={game.background_path ? { backgroundImage: `linear-gradient(rgba(255,250,252,.86),rgba(255,240,248,.9)),url(/api/assets/background/${String(game.public_code)})` } : undefined}
     >
+      {showOpening ? (
+        <GameShowOpening
+          brand={tRoot("brand")}
+          gameTitle={String(game.title)}
+          players={openingPlayers}
+          soundOn={soundOn}
+          onDone={() => setShowOpening(false)}
+        />
+      ) : null}
+
       <style>{`
         @keyframes secretsAlarmFlash { 0%,100% { opacity: 0 } 8% { opacity: .92 } 55% { opacity: .28 } }
         @keyframes secretsAlarmSlam { 0% { transform: scale(.4) rotate(-8deg); opacity: 0 } 40% { transform: scale(1.08) rotate(2deg); opacity: 1 } 60% { transform: scale(.98) rotate(-1deg) } 100% { transform: scale(1) rotate(0); opacity: 1 } }
@@ -502,6 +569,19 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
                 </div>
               ) : null}
             </div>
+            {isLiveStatus(gameStatus) ? (
+              <button
+                onClick={() => {
+                  ensureAudio();
+                  setShowOpening(true);
+                }}
+                aria-label={t("openReplay")}
+                title={t("openReplay")}
+                className="grid size-[clamp(40px,4vw,56px)] shrink-0 place-items-center rounded-full bg-white text-[color:var(--ink)] ring-1 ring-[var(--border)] shadow-sm"
+              >
+                <Clapperboard className="size-1/2" />
+              </button>
+            ) : null}
             <button
               onClick={() => {
                 ensureAudio();
