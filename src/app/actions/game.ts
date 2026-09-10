@@ -1,6 +1,6 @@
 "use server";
 
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -10,6 +10,8 @@ import { roundConfigSchema } from "@/lib/game/rules";
 import { getUser } from "@/lib/auth/session";
 import { setActiveOrganizationId } from "@/lib/auth/active-org";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { processImage } from "@/lib/images";
 
 const localeSchema = z.enum(["en", "fr"]).default("fr");
 
@@ -520,11 +522,42 @@ export async function submitMission(formData: FormData) {
     locale: localeSchema,
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
+
+  // Optional proof photo (required by the mission when the host asked for one —
+  // the RPC enforces that). Processed and stored like every other game asset.
+  let evidencePath: string | null = null;
+  const image = formData.get("proof");
+  if (image instanceof File && image.size > 0) {
+    if (image.size > 10 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp"].includes(image.type)) {
+      throw new Error(
+        parsed.locale === "fr"
+          ? "Photo invalide — JPEG, PNG ou WebP, 10 Mo maximum."
+          : "That photo won't work — use JPEG, PNG or WebP under 10 MB.",
+      );
+    }
+    const { buffer, contentType } = await processImage(image, "hint");
+    evidencePath = `games/${parsed.gameId}/mission-proof/${randomUUID()}.webp`;
+    const { error: uploadError } = await createAdminClient().storage
+      .from("game-assets")
+      .upload(evidencePath, buffer, { contentType });
+    if (uploadError) throw new Error(uploadError.message);
+  }
+
   const { error } = await supabase.rpc("submit_mission", {
     p_mission_id: parsed.missionId,
     p_player_id: parsed.playerId,
+    p_evidence_path: evidencePath,
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.message.includes("proof_required")) {
+      throw new Error(
+        parsed.locale === "fr"
+          ? "Cette mission demande une photo de preuve pour être validée."
+          : "This mission needs a proof photo before you can send it in.",
+      );
+    }
+    throw new Error(error.message);
+  }
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
 }
 

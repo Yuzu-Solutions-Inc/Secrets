@@ -51,11 +51,11 @@ export default async function GamePage({
       supabase.from("wallets").select("id,balance").eq("player_id", currentPlayer.id).maybeSingle(),
       supabase
         .from("mission_assignments")
-        .select("mission_id,submitted_at,seen_at,player_id,team_id,missions!inner(id,game_id,title,instructions,reward,penalty,status,deadline,started_at)")
+        .select("mission_id,submitted_at,seen_at,player_id,team_id,missions!inner(id,game_id,title,instructions,reward,penalty,status,deadline,started_at,require_proof)")
         .eq("missions.game_id", id),
       supabase
         .from("hint_grants")
-        .select("id,scope,source,hints(id,kind,text,asset_path,secret_id)")
+        .select("id,scope,source,hints(id,kind,text,asset_path,image_ref,secret_id)")
         .eq("player_id", currentPlayer.id),
       supabase.from("theory_notes").select("id,body,target_player_id,updated_at").eq("player_id", currentPlayer.id),
       round

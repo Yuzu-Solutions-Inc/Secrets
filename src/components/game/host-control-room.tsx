@@ -65,6 +65,7 @@ import { formatMoney } from "@/lib/utils";
 import { secretCategories } from "@/lib/game/templates";
 import { Avatar } from "./avatar";
 import { BroadcastComposer } from "./broadcast-composer";
+import { HintIcon } from "./hint-icon";
 import { RoundSchedule } from "./round-schedule";
 import { WhitelistManager } from "./whitelist-manager";
 
@@ -387,7 +388,12 @@ export function HostControlRoom({
       {(() => {
         const paused = currentRound?.status === "paused";
         const endsAt = currentRound?.ends_at ? new Date(String(currentRound.ends_at)).getTime() : null;
-        const remaining = endsAt ? Math.max(0, Math.floor((endsAt - now) / 1000)) : null;
+        const liveRemaining = endsAt ? Math.max(0, Math.floor((endsAt - now) / 1000)) : null;
+        // While paused, ends_at is stale — freeze on the seconds snapshotted
+        // when the host hit pause (host_transition writes paused_seconds_left).
+        const pausedLeft =
+          currentRound?.paused_seconds_left != null ? Number(currentRound.paused_seconds_left) : null;
+        const remaining = paused ? pausedLeft ?? liveRemaining : liveRemaining;
         return (
           <div className="bubble-card mt-6 flex flex-wrap items-center gap-3 p-3">
             <div className="min-w-0 flex-1">
@@ -588,32 +594,60 @@ export function HostControlRoom({
                     return (
                       <div key={String(team.id)} className="rounded-2xl bg-pink-50 p-4">
                         <p className="font-black">{String(team.name)}</p>
-                        <p className="text-sm text-[var(--muted)]">{formatMoney(Number(walletRows?.[0]?.balance ?? 0), String(game.currency_symbol))} · {memberRows.length} member{memberRows.length === 1 ? "" : "s"}</p>
-                        <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                          {memberRows.map((m) => String(((m.game_players as Row | null)?.profiles as Row | null)?.display_name ?? tc("player"))).join(", ") || t("noMembers")}
-                        </p>
-                        <details className="mt-2">
+                        <p className="text-sm text-[var(--muted)]">{formatMoney(Number(walletRows?.[0]?.balance ?? 0), String(game.currency_symbol))} · {t("memberCount", { count: memberRows.length })}</p>
+
+                        {memberRows.length ? (
+                          <ul className="mt-2 space-y-1">
+                            {memberRows.map((m) => {
+                              const memberName = String(((m.game_players as Row | null)?.profiles as Row | null)?.display_name ?? tc("player"));
+                              const choice = m.dilemma_choice ? String(m.dilemma_choice) : null;
+                              return (
+                                <li key={String(m.player_id)} className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="min-w-0 truncate font-bold">{memberName}</span>
+                                  <span className={`shrink-0 rounded-full px-2 py-0.5 font-black ${
+                                    choice === "steal"
+                                      ? "bg-red-100 text-red-700"
+                                      : choice === "share"
+                                        ? "bg-emerald-100 text-emerald-800"
+                                        : "bg-[var(--muted-bg,#eee)] text-[var(--muted)]"
+                                  }`}>
+                                    {choice === "steal" ? tp("steal") : choice === "share" ? tp("share") : t("choicePending")}
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="mt-1 text-xs text-[var(--muted)]">{t("noMembers")}</p>
+                        )}
+
+                        <details className="mt-3">
                           <summary className="cursor-pointer text-xs font-bold text-pink-600">{t("editMembers")}</summary>
-                          <ActionForm action={setTeamMembers} success={t("saveMembers")} className="mt-2 grid gap-2">
+                          <ActionForm action={setTeamMembers} success={t("saveMembers")} className="mt-2 space-y-2">
                             <input type="hidden" name="locale" value={locale} />
                             <input type="hidden" name="gameId" value={String(game.id)} />
                             <input type="hidden" name="teamId" value={String(team.id)} />
-                            <div className="grid grid-cols-2 gap-1">
+                            <div className="space-y-1">
                               {players.map((player) => {
                                 const profile = player.profiles as Row | null;
                                 const isMember = memberRows.some((m) => String(m.player_id) === String(player.id));
-                                return <label key={String(player.id)} className="rounded-lg bg-white p-1.5 text-xs"><input className="mr-1.5" type="checkbox" name="playerIds" value={String(player.id)} defaultChecked={isMember} />{String(profile?.display_name ?? tc("player"))}</label>;
+                                return (
+                                  <label key={String(player.id)} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm">
+                                    <input className="size-4 shrink-0 accent-pink-600" type="checkbox" name="playerIds" value={String(player.id)} defaultChecked={isMember} />
+                                    <span className="truncate">{String(profile?.display_name ?? tc("player"))}</span>
+                                  </label>
+                                );
                               })}
                             </div>
-                            <button className="pill pill-secondary h-8 w-fit text-xs">{t("saveMembers")}</button>
+                            <button className="pill pill-secondary w-full text-sm">{t("saveMembers")}</button>
                           </ActionForm>
                         </details>
-                        <div className="mt-2 flex flex-wrap gap-2">
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
                           <ActionForm action={settleTeamDilemma} success={t("revealSettle")}>
                             <input type="hidden" name="locale" value={locale} />
                             <input type="hidden" name="gameId" value={String(game.id)} />
                             <input type="hidden" name="teamId" value={String(team.id)} />
-                            <button className="pill pill-secondary h-8 text-xs">{t("revealSettle")}</button>
+                            <button className="pill pill-secondary h-9 text-xs">{t("revealSettle")}</button>
                           </ActionForm>
                           <ActionForm action={deleteTeam} success={tc("delete")} confirm={`${tc("delete")} — ${String(team.name)}?`}>
                             <input type="hidden" name="locale" value={locale} />
@@ -785,7 +819,9 @@ export function HostControlRoom({
                                         <input type="hidden" name="locale" value={locale} />
                                         <input type="hidden" name="gameId" value={String(game.id)} />
                                         <input type="hidden" name="clueId" value={String(clue.id)} />
-                                        <button className="font-black text-emerald-700 hover:underline">{t("release")}</button>
+                                        <button className="pill pill-secondary h-8 gap-1 text-xs" title={t("clueReleaseFlashHint")}>
+                                          <Megaphone size={12} /> {t("release")}
+                                        </button>
                                       </ActionForm>
                                     ) : null}
                                     <ActionForm action={deleteHouseClue} success={tc("delete")} confirm={`${tc("delete")}?`}>
@@ -898,6 +934,8 @@ export function HostControlRoom({
                                   {hint.asset_path ? (
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img src={`/api/assets/hints/${String(hint.id)}`} alt={t("imageHint")} className="max-h-32 rounded-xl" />
+                                  ) : hint.image_ref ? (
+                                    <HintIcon refValue={String(hint.image_ref)} className="flex w-fit items-center justify-center rounded-xl bg-pink-50 p-3" />
                                   ) : null}
                                   <div className="mt-1 flex items-center gap-3 text-xs">
                                     <span className="text-[var(--muted)]">#{Number(hint.position) + 1}{hint.released_at ? ` · ${t("releasedTag")}` : ""}</span>
@@ -1078,6 +1116,14 @@ export function HostControlRoom({
                 </label>
               </div>
 
+              <label className="flex items-start gap-2 text-xs font-bold">
+                <input className="mt-0.5 size-4 shrink-0 accent-pink-600" type="checkbox" name="requireProof" />
+                <span>
+                  {t("requireProofLabel")}
+                  <span className="mt-0.5 block font-normal text-[var(--muted)]">{t("requireProofHint")}</span>
+                </span>
+              </label>
+
               <button className="pill pill-primary w-fit"><Sparkles size={16} /> {t("saveDraftMission")}</button>
             </ActionForm>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -1112,6 +1158,9 @@ export function HostControlRoom({
                     ) : (
                       <span className="text-[var(--muted)]">{t("noPenalty")}</span>
                     )}
+                    {mission.require_proof ? (
+                      <span className="inline-flex items-center gap-1 text-violet-700"><Eye size={13} /> {t("proofRequiredTag")}</span>
+                    ) : null}
                   </div>
                   {isDraft ? (
                     <ActionForm action={startMission} success={t("toastMissionLive")} className="mt-4">
@@ -1126,10 +1175,26 @@ export function HostControlRoom({
                   {((mission.mission_assignments as Row[] | undefined) ?? []).map((assignment) => {
                     const assignedPlayer = assignment.game_players as Row | null;
                     const assignedProfile = assignedPlayer?.profiles as Row | null;
+                    const resolved = status === "approved" || status === "failed";
                     return (
                       <div key={String(assignment.id)} className="mt-4 rounded-xl bg-pink-50 p-3">
-                        <p className="text-sm font-bold">{String(assignedProfile?.display_name ?? tc("player"))} · {assignment.submitted_at ? t("submitted") : t("inProgress")}</p>
-                        {assignment.submitted_at ? (
+                        <p className="text-sm font-bold">
+                          {String(assignedProfile?.display_name ?? tc("player"))} ·{" "}
+                          {resolved
+                            ? status === "approved" ? t("resultApproved") : t("resultFailed")
+                            : assignment.submitted_at ? t("submitted") : t("inProgress")}
+                        </p>
+                        {assignment.evidence_path ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={`/api/assets/mission-proof/${String(assignment.id)}`}
+                            alt={t("proofPhoto")}
+                            className="mt-2 max-h-48 rounded-lg"
+                          />
+                        ) : mission.require_proof && assignment.submitted_at ? (
+                          <p className="mt-1 text-xs text-[var(--muted)]">{t("proofMissing")}</p>
+                        ) : null}
+                        {assignment.submitted_at && !resolved ? (
                           <div className="mt-2 grid grid-cols-2 gap-2">
                             {(["approved", "failed"] as const).map((result) => (
                               <ActionForm

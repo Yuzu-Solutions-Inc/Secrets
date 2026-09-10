@@ -173,7 +173,17 @@ export async function settleTeamDilemma(formData: FormData) {
   const parsed = base.extend({ teamId: z.string().uuid() }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
   const { error } = await supabase.rpc("settle_team_dilemma", { p_team_id: parsed.teamId });
-  if (error) throw new Error(error.message);
+  if (error) {
+    const fr = parsed.locale === "fr";
+    if (error.message.includes("choices_incomplete")) {
+      throw new Error(
+        fr
+          ? "Chaque membre doit d'abord choisir Partager ou Voler."
+          : "Every member has to choose Share or Steal first.",
+      );
+    }
+    throw new Error(fr ? "Le règlement du dilemme a échoué." : "Settling the dilemma didn't go through.");
+  }
   refresh(parsed.locale, parsed.gameId);
 }
 
@@ -215,6 +225,8 @@ export async function createMission(formData: FormData) {
     // Start (start_mission sets deadline = now + timer_minutes). Missions still
     // close only when the host says so (item 9).
     timerMinutes: z.coerce.number().int().min(0).max(1440).optional().default(0),
+    // When set, the player must attach a proof photo to mark the mission done.
+    requireProof: z.enum(["on"]).optional(),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
   // Missions are always created as a hidden draft — including pre-assigned
@@ -228,6 +240,7 @@ export async function createMission(formData: FormData) {
     visibility: parsed.visibility,
     status: "draft",
     timer_minutes: parsed.timerMinutes,
+    require_proof: parsed.requireProof === "on",
   }).select("id").single();
   if (error) throw new Error(error.message);
 
@@ -781,7 +794,8 @@ export async function deleteHouseClue(formData: FormData) {
   refresh(parsed.locale, parsed.gameId);
 }
 
-// Release one specific held clue.
+// Release one specific held clue. Releasing also drops a public "clue" event
+// so the TV flashes it for 15s with an attention chime (see public-display).
 export async function releaseHouseClue(formData: FormData) {
   const parsed = base.extend({
     clueId: z.string().uuid(),
@@ -789,12 +803,23 @@ export async function releaseHouseClue(formData: FormData) {
   const supabase = await createClient();
   const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
   if (!allowed) throw new Error("forbidden");
-  const { error } = await supabase
+  const { data: clue, error } = await supabase
     .from("house_secret_clues")
     .update({ released_at: new Date().toISOString() })
     .eq("id", parsed.clueId)
-    .is("released_at", null);
+    .is("released_at", null)
+    .select("text")
+    .maybeSingle();
   if (error) throw new Error(error.message);
+  if (clue) {
+    await supabase.from("game_events").insert({
+      game_id: parsed.gameId,
+      kind: "clue",
+      title: clue.text || (parsed.locale === "fr" ? "Nouvel indice" : "New clue"),
+      is_public: true,
+      published_at: new Date().toISOString(),
+    });
+  }
   refresh(parsed.locale, parsed.gameId);
 }
 

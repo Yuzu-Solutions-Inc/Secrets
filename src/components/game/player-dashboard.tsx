@@ -40,6 +40,7 @@ import { castVote } from "@/app/actions/admin";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
 import { Avatar } from "./avatar";
+import { HintIcon, isIconHint } from "./hint-icon";
 
 type Player = {
   id: string;
@@ -54,6 +55,7 @@ type VaultHint = {
   kind: string;
   text: string | null;
   has_image?: boolean;
+  image_ref?: string | null;
   position: number;
   about_player_id: string | null;
   about_player_name: string | null;
@@ -253,7 +255,12 @@ export function PlayerDashboard(props: Props) {
     setRevealArmed(false);
   }
 
-  const mission = props.missions[0]?.missions as Record<string, unknown> | undefined;
+  // Every mission the host has started for this player — a player can hold
+  // several at once, so all of them render (drafts stay hidden).
+  const missionRows = props.missions.filter((row) => {
+    const m = row.missions as Record<string, unknown> | undefined;
+    return m != null && m.status !== "draft";
+  });
 
   // A mission the host has started that this player has not opened yet. Drives
   // the "new mission" indicator; acknowledging it also writes seen_at so the
@@ -288,7 +295,7 @@ export function PlayerDashboard(props: Props) {
     hasSecret ||
     showBallot ||
     props.activeBuzzes.length > 0 ||
-    Boolean(mission) ||
+    missionRows.length > 0 ||
     isTeamRound ||
     props.hints.length > 0 ||
     props.hintOffers.length > 0;
@@ -343,6 +350,37 @@ export function PlayerDashboard(props: Props) {
         </button>
       ) : null}
 
+      {/* Broadcast dilemmas — Accept or Refuse a one-sentence offer from the
+          host. Top-level (not inside the Vault) so a live dilemma is always
+          visible and answerable. */}
+      {(props.dilemmas ?? []).map((dilemma) => (
+        <div key={dilemma.id} className="mt-4 rounded-2xl border border-pink-200 bg-white p-4 shadow-lg shadow-pink-500/10">
+          <div className="flex items-center gap-2 font-black"><ShieldQuestion className="text-pink-600" /> {dilemma.prompt}</div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {(["accept", "refuse"] as const).map((choice) => {
+              const chosen = dilemma.myChoice === choice;
+              return (
+                <form key={choice} action={respondToDilemma}>
+                  <input type="hidden" name="locale" value={props.locale} />
+                  <input type="hidden" name="gameId" value={props.game.id} />
+                  <input type="hidden" name="eventId" value={dilemma.id} />
+                  <input type="hidden" name="playerId" value={props.playerId} />
+                  <input type="hidden" name="choice" value={choice} />
+                  <button className={`pill w-full ${chosen ? "pill-primary" : "pill-secondary"}`}>
+                    {choice === "accept" ? t("accept") : t("refuse")}
+                  </button>
+                </form>
+              );
+            })}
+          </div>
+          {dilemma.myChoice ? (
+            <p className="mt-2 text-xs font-bold text-[var(--muted)]">
+              {dilemma.myChoice === "accept" ? t("dilemmaAccepted") : t("dilemmaRefused")}
+            </p>
+          ) : null}
+        </div>
+      ))}
+
       {/* 2. Money */}
       <article className="mt-4 rounded-[var(--radius)] bg-gradient-to-br from-pink-500 to-fuchsia-700 p-5 text-white shadow-[var(--shadow)]">
         <p className="flex items-center gap-2 text-sm font-bold text-white/90">
@@ -392,7 +430,7 @@ export function PlayerDashboard(props: Props) {
                 hasSecret={hasSecret}
                 canSetSecret={canSetSecret}
                 showBallot={showBallot}
-                mission={mission}
+                missionRows={missionRows}
                 team={team}
                 isTeamRound={isTeamRound}
                 targets={targets}
@@ -476,7 +514,9 @@ export function PlayerDashboard(props: Props) {
                   {selectedHints.map((hint) => (
                     <li key={hint.id} className="space-y-2 rounded-2xl bg-amber-50 p-3 text-sm">
                       {hint.text ? <p>{hint.text}</p> : null}
-                      {hint.has_image || hint.kind === "image" ? (
+                      {isIconHint(hint) ? (
+                        <HintIcon refValue={hint.image_ref} className="flex items-center justify-center rounded-xl bg-white/70 py-6" />
+                      ) : hint.has_image || hint.kind === "image" ? (
                         <Image
                           className="h-auto w-full rounded-xl"
                           src={`/api/assets/hints/${hint.id}`}
@@ -751,7 +791,7 @@ type MyGameProps = Props & {
   hasSecret: boolean;
   canSetSecret: boolean;
   showBallot: boolean;
-  mission: Record<string, unknown> | undefined;
+  missionRows: Array<Record<string, unknown>>;
   team: Record<string, unknown> | undefined;
   isTeamRound: boolean;
   targets: Player[];
@@ -770,7 +810,7 @@ function MyGame(props: MyGameProps) {
     hasSecret,
     canSetSecret,
     showBallot,
-    mission,
+    missionRows,
     team,
     isTeamRound,
     targets,
@@ -850,34 +890,6 @@ function MyGame(props: MyGameProps) {
         </div>
       ) : null}
 
-      {/* Broadcast dilemmas — Accept or Refuse a one-sentence offer */}
-      {(props.dilemmas ?? []).map((dilemma) => (
-        <div key={dilemma.id} className="rounded-2xl border border-pink-200 bg-white p-4">
-          <div className="flex items-center gap-2 font-black"><ShieldQuestion className="text-pink-600" /> {dilemma.prompt}</div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {(["accept", "refuse"] as const).map((choice) => {
-              const chosen = dilemma.myChoice === choice;
-              return (
-                <form key={choice} action={respondToDilemma}>
-                  <input type="hidden" name="locale" value={props.locale} />
-                  <input type="hidden" name="gameId" value={props.game.id} />
-                  <input type="hidden" name="eventId" value={dilemma.id} />
-                  <input type="hidden" name="playerId" value={props.playerId} />
-                  <input type="hidden" name="choice" value={choice} />
-                  <button className={`pill w-full ${chosen ? "pill-primary" : "pill-secondary"}`}>
-                    {choice === "accept" ? t("accept") : t("refuse")}
-                  </button>
-                </form>
-              );
-            })}
-          </div>
-          {dilemma.myChoice ? (
-            <p className="mt-2 text-xs font-bold text-[var(--muted)]">
-              {dilemma.myChoice === "accept" ? t("dilemmaAccepted") : t("dilemmaRefused")}
-            </p>
-          ) : null}
-        </div>
-      ))}
 
       {/* Secret ballot */}
       {showBallot && props.round ? (
@@ -930,31 +942,59 @@ function MyGame(props: MyGameProps) {
         );
       })}
 
-      {/* Mission */}
-      {mission ? (
-        <div className="rounded-2xl border border-pink-100 bg-white p-4">
-          <div className="flex items-center gap-2 font-black"><Zap className="text-pink-600" /> {t("mission")}</div>
-          <h3 className="display mt-3 text-xl font-black">{String(mission.title)}</h3>
-          <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{String(mission.instructions)}</p>
-          <p className="mt-3 text-sm font-black">
-            <span className="text-emerald-600">
-              {t("rewardIfApproved", { amount: formatMoney(Number(mission.reward), props.game.currency_symbol) })}
-            </span>
-            {Number(mission.penalty) > 0 ? (
-              <span className="mt-1 block text-red-600">
-                {t("penaltyIfFailed", { amount: formatMoney(Number(mission.penalty), props.game.currency_symbol) })}
+      {/* Missions — a player can hold more than one at a time */}
+      {missionRows.map((row) => {
+        const m = row.missions as Record<string, unknown>;
+        const status = String(m.status);
+        const submitted = Boolean(row.submitted_at) || status === "submitted";
+        const resolved = status === "approved" || status === "failed";
+        const requireProof = Boolean(m.require_proof);
+        return (
+          <div key={String(m.id)} className="rounded-2xl border border-pink-100 bg-white p-4">
+            <div className="flex items-center gap-2 font-black"><Zap className="text-pink-600" /> {t("mission")}</div>
+            <h3 className="display mt-3 text-xl font-black">{String(m.title)}</h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{String(m.instructions)}</p>
+            <p className="mt-3 text-sm font-black">
+              <span className="text-emerald-600">
+                {t("rewardIfApproved", { amount: formatMoney(Number(m.reward), props.game.currency_symbol) })}
               </span>
-            ) : null}
-          </p>
-          <form action={submitMission} className="mt-3">
-            <input type="hidden" name="locale" value={props.locale} />
-            <input type="hidden" name="gameId" value={props.game.id} />
-            <input type="hidden" name="missionId" value={String(mission.id)} />
-            <input type="hidden" name="playerId" value={props.playerId} />
-            <button className="pill pill-primary w-full">{t("markComplete")}</button>
-          </form>
-        </div>
-      ) : null}
+              {Number(m.penalty) > 0 ? (
+                <span className="mt-1 block text-red-600">
+                  {t("penaltyIfFailed", { amount: formatMoney(Number(m.penalty), props.game.currency_symbol) })}
+                </span>
+              ) : null}
+            </p>
+            {resolved ? (
+              <p className={`mt-3 rounded-xl px-3 py-2 text-sm font-black ${status === "approved" ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-700"}`}>
+                {status === "approved" ? t("missionApproved") : t("missionFailed")}
+              </p>
+            ) : submitted ? (
+              <p className="mt-3 rounded-xl bg-amber-100 px-3 py-2 text-sm font-black text-amber-900">{t("missionAwaitingReview")}</p>
+            ) : (
+              <form action={submitMission} className="mt-3 space-y-2">
+                <input type="hidden" name="locale" value={props.locale} />
+                <input type="hidden" name="gameId" value={props.game.id} />
+                <input type="hidden" name="missionId" value={String(m.id)} />
+                <input type="hidden" name="playerId" value={props.playerId} />
+                {requireProof ? (
+                  <>
+                    <p className="text-xs font-bold text-violet-700">{t("proofRequiredNote")}</p>
+                    <input
+                      className="field text-sm"
+                      type="file"
+                      name="proof"
+                      accept="image/png,image/jpeg,image/webp"
+                      capture="environment"
+                      required
+                    />
+                  </>
+                ) : null}
+                <button className="pill pill-primary w-full">{t("markComplete")}</button>
+              </form>
+            )}
+          </div>
+        );
+      })}
 
       {/* Team */}
       {isTeamRound ? (
@@ -990,7 +1030,9 @@ function MyGame(props: MyGameProps) {
               return (
                 <details key={String(grant.id)} className="rounded-2xl bg-amber-50 p-4">
                   <summary className="cursor-pointer font-bold">{String(hint?.text ?? t("imageHint"))}</summary>
-                  {hint?.asset_path || hint?.kind === "image" ? (
+                  {isIconHint(hint as { image_ref?: string | null; asset_path?: string | null } | undefined) ? (
+                    <HintIcon refValue={hint?.image_ref as string | null | undefined} className="mt-3 flex items-center justify-center rounded-xl bg-white/70 py-8" />
+                  ) : hint?.asset_path || hint?.kind === "image" ? (
                     <Image
                       className="mt-3 h-auto w-full rounded-xl"
                       src={`/api/assets/hints/${String(hint.id)}`}

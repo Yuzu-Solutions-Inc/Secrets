@@ -46,9 +46,12 @@ export type DashboardData = {
   verdict: Verdict | null;
 };
 
-// A broadcast event holds the screen full-size for a minute, then lives on in
-// the history column (item 18). Phones show it for 5s (player dashboard).
+// A broadcast event holds the screen full-size, then lives on in the history
+// column (item 18). Phones show it for 5s (player dashboard). Clues — the
+// house-clue "drop" the host releases — hold for 15s; other broadcasts a
+// minute.
 const TAKEOVER_MS = 60_000;
+const CLUE_TAKEOVER_MS = 15_000;
 
 const EVENT_META: Record<string, { icon: typeof Megaphone; tint: string; label: string }> = {
   announcement: { icon: Megaphone, tint: "from-pink-500 to-fuchsia-600", label: "Announcement" },
@@ -215,8 +218,11 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
       const ctx = ensureAudio();
       if (!ctx || ctx.state !== "running") return;
       if (kind === "clue") {
-        tone(0, 880, 0.18, "sine", 0.22);
-        tone(0.14, 1174.7, 0.4, "sine", 0.22);
+        // A brighter, look-up-at-the-screen alert for a released clue.
+        tone(0, 987.77, 0.12, "square", 0.24);
+        tone(0.13, 987.77, 0.12, "square", 0.24);
+        tone(0.3, 1318.5, 0.16, "square", 0.26);
+        tone(0.5, 1567.98, 0.5, "sine", 0.22);
       } else if (kind === "dilemma") {
         tone(0, 392, 0.22, "triangle", 0.24);
         tone(0.18, 523.25, 0.22, "triangle", 0.24);
@@ -320,9 +326,10 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
     const id = newest ? String(newest.id) : null;
     if (!id || id === eventSeenRef.current) return;
     eventSeenRef.current = id;
+    const kind = String(newest.kind ?? "announcement");
     setTakeover(newest);
-    if (soundOn) playEventChime(String(newest.kind ?? "announcement"));
-    const clear = window.setTimeout(() => setTakeover(null), TAKEOVER_MS);
+    if (soundOn) playEventChime(kind);
+    const clear = window.setTimeout(() => setTakeover(null), kind === "clue" ? CLUE_TAKEOVER_MS : TAKEOVER_MS);
     return () => window.clearTimeout(clear);
   }, [recentEvents, soundOn, playEventChime]);
 
@@ -339,8 +346,14 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
     [],
   );
 
+  const roundPaused = String(round?.status ?? "") === "paused";
   const end = round?.ends_at ? new Date(String(round.ends_at)).getTime() : null;
-  const remaining = end && now ? Math.max(0, Math.floor((end - now) / 1000)) : null;
+  const liveRemaining = end && now ? Math.max(0, Math.floor((end - now) / 1000)) : null;
+  // Paused rounds freeze on the snapshot host_transition wrote at pause time;
+  // ends_at is not advanced until the host resumes.
+  const pausedLeft =
+    round && round.paused_seconds_left != null ? Number(round.paused_seconds_left) : null;
+  const remaining = roundPaused ? pausedLeft ?? liveRemaining : liveRemaining;
 
   const statusLabel = (status: string) => {
     if (status === "confrontation") return t("faceOff");
@@ -572,9 +585,10 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
             <div className="text-right">
               <p className="text-[clamp(.7rem,1.3vw,1.05rem)] font-black uppercase tracking-[.2em] text-pink-600">
                 {String(round?.title ?? t("waiting"))}
+                {roundPaused ? <span className="ml-2 text-[color:var(--muted)]">· {t("paused")}</span> : null}
               </p>
               {remaining !== null ? (
-                <div className="mt-[4px] flex items-center justify-end gap-[clamp(.4rem,1vw,.75rem)] text-[color:var(--ink)]">
+                <div className={`mt-[4px] flex items-center justify-end gap-[clamp(.4rem,1vw,.75rem)] text-[color:var(--ink)] ${roundPaused ? "opacity-60" : ""}`}>
                   <Timer className="size-[clamp(1.4rem,2.6vw,2.4rem)] text-pink-500" />
                   <span className="display text-[clamp(1.9rem,4.4vw,3.75rem)] font-black tabular-nums leading-none">
                     {String(Math.floor(remaining / 60)).padStart(2, "0")}:{String(remaining % 60).padStart(2, "0")}

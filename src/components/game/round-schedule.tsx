@@ -349,64 +349,73 @@ function RoundRow({
 
           <details className="rounded-xl border border-pink-100 bg-white/60 px-3 py-2 text-xs">
             <summary className="cursor-pointer font-bold text-[var(--muted)]">{t("advanced")}</summary>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="font-bold">
-                {t("accusationCost")}
-                <input
-                  className="field mt-1"
-                  name="accusationStake"
-                  type="number"
-                  min="0"
-                  defaultValue={Math.round(Number(cfg.accusationStake ?? 0) / 100)}
-                  required
-                />
-              </label>
-              <label className="font-bold">
-                {t("hintCost")}
-                <input
-                  className="field mt-1"
-                  name="hintPrice"
-                  type="number"
-                  min="0"
-                  defaultValue={Math.round(Number(cfg.hintPrice ?? 0) / 100)}
-                  required
-                />
-              </label>
-              <label className="font-bold">
-                {t("transferPct")}
-                <input
-                  className="field mt-1"
-                  name="correctTransferPercent"
-                  type="number"
-                  min="0"
-                  max="100"
-                  defaultValue={Number(cfg.correctTransferPercent ?? 50)}
-                  required
-                />
-              </label>
-              <label className="font-bold">
-                {t("hintVisibility")}
-                <select className="field mt-1" name="hintVisibility" defaultValue={String(cfg.hintVisibility ?? "private")}>
-                  <option value="private">{t("visPrivate")}</option>
-                  <option value="team">{t("visTeam")}</option>
-                  <option value="public">{t("visPublic")}</option>
-                </select>
-              </label>
+            <div className="mt-3 space-y-3">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <label className="font-bold">
+                  {t("accusationCost")}
+                  <input
+                    className="field mt-1 h-9"
+                    name="accusationStake"
+                    type="number"
+                    min="0"
+                    defaultValue={Math.round(Number(cfg.accusationStake ?? 0) / 100)}
+                    required
+                  />
+                </label>
+                <label className="font-bold">
+                  {t("hintCost")}
+                  <input
+                    className="field mt-1 h-9"
+                    name="hintPrice"
+                    type="number"
+                    min="0"
+                    defaultValue={Math.round(Number(cfg.hintPrice ?? 0) / 100)}
+                    required
+                  />
+                </label>
+                <label className="font-bold">
+                  {t("transferPct")}
+                  <input
+                    className="field mt-1 h-9"
+                    name="correctTransferPercent"
+                    type="number"
+                    min="0"
+                    max="100"
+                    defaultValue={Number(cfg.correctTransferPercent ?? 50)}
+                    required
+                  />
+                </label>
+              </div>
+
+              <fieldset className="rounded-lg border border-pink-100 p-2.5">
+                <legend className="px-1 font-bold text-[var(--muted)]">{t("buzzersLegend")}</legend>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="flex items-center gap-2 font-bold">
+                    <input className="size-4 shrink-0 accent-pink-600" type="checkbox" name="accusationBuzzEnabled" defaultChecked={cfg.accusationBuzzEnabled !== false} />
+                    {t("accusationEnabled")}
+                  </label>
+                  <label className="flex items-center gap-2 font-bold">
+                    <input className="size-4 shrink-0 accent-pink-600" type="checkbox" name="hintBuzzEnabled" defaultChecked={cfg.hintBuzzEnabled !== false} />
+                    {t("hintEnabled")}
+                  </label>
+                  <label className="font-bold sm:col-span-2">
+                    {t("hintVisibility")}
+                    <select className="field mt-1 h-9" name="hintVisibility" defaultValue={String(cfg.hintVisibility ?? "private")}>
+                      <option value="private">{t("visPrivate")}</option>
+                      <option value="team">{t("visTeam")}</option>
+                      <option value="public">{t("visPublic")}</option>
+                    </select>
+                  </label>
+                </div>
+              </fieldset>
+
               <label className="font-bold">
                 {t("completesOn")}
-                <select className="field mt-1" name="completion" defaultValue={String(cfg.completion ?? "manual")}>
+                <select className="field mt-1 h-9" name="completion" defaultValue={String(cfg.completion ?? "manual")}>
                   <option value="manual">{t("compManual")}</option>
                   <option value="timer">{t("compTimer")}</option>
                   <option value="all_submitted">{t("compAll")}</option>
                 </select>
-              </label>
-              <label className="flex items-center gap-2 font-bold">
-                <input type="checkbox" name="accusationBuzzEnabled" defaultChecked={cfg.accusationBuzzEnabled !== false} />
-                {t("accusationEnabled")}
-              </label>
-              <label className="flex items-center gap-2 font-bold">
-                <input type="checkbox" name="hintBuzzEnabled" defaultChecked={cfg.hintBuzzEnabled !== false} />
-                {t("hintEnabled")}
               </label>
             </div>
           </details>
