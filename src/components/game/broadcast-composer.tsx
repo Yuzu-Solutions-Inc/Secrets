@@ -5,35 +5,41 @@ import { Megaphone } from "lucide-react";
 
 import { assignPower, publishDilemma, publishEvent } from "@/app/actions/admin";
 import { powerSeeds } from "@/lib/game/seeds";
+import { POWER_EFFECT_LABELS } from "@/lib/game/rules";
+import { ActionForm } from "./action-form";
 
 type Row = Record<string, unknown>;
 type Named = { id: string; name: string };
+type PowerKey = "double-vote" | "immunity" | "buzz-shield";
 
 type EffectDraft =
   | { type: "cash"; direction: "gain" | "loss"; amount: number }
   | { type: "free_hint"; recipients: "responder" | "all"; aboutPlayerId: string }
   | { type: "free_buzz"; recipients: "responder" | "all" }
-  | { type: "buzz_immunity"; recipients: "responder" | "all"; minutes: number };
+  | { type: "power"; power: PowerKey; recipients: "responder" | "all" };
 
-const EFFECT_LABELS: Record<EffectDraft["type"], string> = {
-  cash: "Money",
-  free_hint: "Free hint",
-  free_buzz: "Free buzz",
-  buzz_immunity: "Buzz immunity",
-};
-
-function blankEffect(type: EffectDraft["type"]): EffectDraft {
-  switch (type) {
+function effectLabel(effect: EffectDraft): string {
+  switch (effect.type) {
     case "cash":
-      return { type: "cash", direction: "gain", amount: 500 };
+      return "Money";
     case "free_hint":
-      return { type: "free_hint", recipients: "responder", aboutPlayerId: "" };
+      return "Free hint";
     case "free_buzz":
-      return { type: "free_buzz", recipients: "responder" };
-    case "buzz_immunity":
-      return { type: "buzz_immunity", recipients: "responder", minutes: 10 };
+      return "Free buzz";
+    case "power":
+      return POWER_EFFECT_LABELS[effect.power];
   }
 }
+
+// The buttons that add a fresh effect row, in the order the host reads them.
+const ADD_EFFECTS: { label: string; make: () => EffectDraft }[] = [
+  { label: "Money", make: () => ({ type: "cash", direction: "gain", amount: 500 }) },
+  { label: "Free buzz", make: () => ({ type: "free_buzz", recipients: "responder" }) },
+  { label: "Free hint", make: () => ({ type: "free_hint", recipients: "responder", aboutPlayerId: "" }) },
+  { label: "2 votes", make: () => ({ type: "power", power: "double-vote", recipients: "responder" }) },
+  { label: "Immunity", make: () => ({ type: "power", power: "immunity", recipients: "responder" }) },
+  { label: "Buzz shield", make: () => ({ type: "power", power: "buzz-shield", recipients: "responder" }) },
+];
 
 // What actually gets sent — drop empty optional fields.
 function serializeEffects(effects: EffectDraft[]) {
@@ -45,13 +51,6 @@ function serializeEffects(effects: EffectDraft[]) {
     return effect;
   });
 }
-
-const PRESETS: { label: string; effects: EffectDraft[] }[] = [
-  { label: "Get $500 + free hint to everyone", effects: [{ type: "cash", direction: "gain", amount: 500 }, { type: "free_hint", recipients: "all", aboutPlayerId: "" }] },
-  { label: "Free hint for everyone", effects: [{ type: "free_hint", recipients: "all", aboutPlayerId: "" }] },
-  { label: "Free buzz for the accepter", effects: [{ type: "free_buzz", recipients: "responder" }] },
-  { label: "Buzz immunity for the accepter", effects: [{ type: "buzz_immunity", recipients: "responder", minutes: 10 }] },
-];
 
 export function BroadcastComposer({
   locale,
@@ -103,7 +102,15 @@ export function BroadcastComposer({
       </div>
 
       {broadcastType === "announcement" || broadcastType === "clue" ? (
-        <form action={publishEvent} className="mt-4 grid gap-2">
+        <ActionForm
+          action={publishEvent}
+          success={broadcastType === "clue" ? "Clue broadcast" : "Announcement broadcast"}
+          onDone={() => {
+            const el = document.getElementById("broadcast-title") as HTMLInputElement | null;
+            if (el) el.value = "";
+          }}
+          className="mt-4 grid gap-2"
+        >
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="gameId" value={gameId} />
           <input type="hidden" name="kind" value={broadcastType} />
@@ -112,15 +119,15 @@ export function BroadcastComposer({
               ? "A clue — its own dashboard sound and animation. Always public, always for everyone."
               : "One line for the whole room, full-screen on the dashboard with sound. Always public."}
           </p>
-          <input className="field" name="title" placeholder={broadcastType === "clue" ? "The clue…" : "The announcement…"} required />
+          <input id="broadcast-title" className="field" name="title" placeholder={broadcastType === "clue" ? "The clue…" : "The announcement…"} required />
           <button className="pill pill-primary w-fit">
             <Megaphone size={16} /> Broadcast
           </button>
-        </form>
+        </ActionForm>
       ) : null}
 
       {broadcastType === "dilemma" ? (
-        <form action={publishDilemma} className="mt-4 grid gap-3">
+        <ActionForm action={publishDilemma} success="Dilemma sent" className="mt-4 grid gap-3">
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="gameId" value={gameId} />
           <input type="hidden" name="effects" value={JSON.stringify(serializeEffects(effects))} />
@@ -188,14 +195,14 @@ export function BroadcastComposer({
             </legend>
             {!effects.length ? (
               <p className="text-xs text-[var(--muted)]">
-                Nothing yet. Add an effect, or pick a preset. Refuse never does anything.
+                Nothing yet. Add an effect below. Refuse never does anything.
               </p>
             ) : null}
             <div className="mt-2 space-y-2">
               {effects.map((effect, index) => (
                 <div key={index} className="flex flex-wrap items-center gap-2 rounded-lg bg-white p-2 text-xs">
                   <span className="rounded-full bg-pink-100 px-2 py-1 font-black text-pink-700">
-                    {EFFECT_LABELS[effect.type]}
+                    {effectLabel(effect)}
                   </span>
 
                   {effect.type === "cash" ? (
@@ -218,7 +225,7 @@ export function BroadcastComposer({
                     </>
                   ) : null}
 
-                  {effect.type === "free_hint" || effect.type === "free_buzz" || effect.type === "buzz_immunity" ? (
+                  {effect.type === "free_hint" || effect.type === "free_buzz" || effect.type === "power" ? (
                     <select
                       className="field h-8 w-auto"
                       value={effect.recipients}
@@ -244,20 +251,6 @@ export function BroadcastComposer({
                     </select>
                   ) : null}
 
-                  {effect.type === "buzz_immunity" ? (
-                    <span className="flex items-center gap-1">
-                      <input
-                        className="field h-8 w-16"
-                        type="number"
-                        min={1}
-                        max={180}
-                        value={effect.minutes}
-                        onChange={(e) => updateEffect(index, { minutes: Math.min(180, Math.max(1, Number(e.target.value))) })}
-                      />
-                      min
-                    </span>
-                  ) : null}
-
                   <button
                     type="button"
                     onClick={() => removeEffect(index)}
@@ -270,26 +263,14 @@ export function BroadcastComposer({
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
-              {(Object.keys(EFFECT_LABELS) as EffectDraft["type"][]).map((type) => (
+              {ADD_EFFECTS.map(({ label, make }) => (
                 <button
-                  key={type}
+                  key={label}
                   type="button"
-                  onClick={() => setEffects((prev) => [...prev, blankEffect(type)])}
+                  onClick={() => setEffects((prev) => [...prev, make()])}
                   className="pill pill-secondary h-8 text-xs"
                 >
-                  + {EFFECT_LABELS[type]}
-                </button>
-              ))}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {PRESETS.map((preset) => (
-                <button
-                  key={preset.label}
-                  type="button"
-                  onClick={() => setEffects(preset.effects.map((e) => ({ ...e })))}
-                  className="rounded-full bg-white px-2 py-1 text-[11px] font-bold text-pink-600 ring-1 ring-pink-100 hover:bg-pink-50"
-                >
-                  {preset.label}
+                  + {label}
                 </button>
               ))}
             </div>
@@ -299,11 +280,11 @@ export function BroadcastComposer({
             <input type="checkbox" name="isPublic" /> Show on the dashboard
           </label>
           <button className="pill pill-primary w-fit">Send dilemma</button>
-        </form>
+        </ActionForm>
       ) : null}
 
       {broadcastType === "power" ? (
-        <form action={assignPower} className="mt-4 grid gap-3">
+        <ActionForm action={assignPower} success="Power granted" className="mt-4 grid gap-3">
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="gameId" value={gameId} />
           <div className="grid gap-3 sm:grid-cols-[12rem_1fr] sm:items-start">
@@ -376,7 +357,7 @@ export function BroadcastComposer({
             <input type="checkbox" name="isPublic" defaultChecked /> Announce on the dashboard
           </label>
           <button className="pill pill-primary w-fit">Grant power</button>
-        </form>
+        </ActionForm>
       ) : null}
     </div>
   );
