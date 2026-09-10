@@ -325,13 +325,13 @@ export default async function LandingPage({ params }: Params) {
   return (
     <main className="mx-auto min-h-dvh max-w-6xl px-5 py-6 sm:px-8">
       <nav className="flex items-center justify-between gap-3">
-        <span className="display flex items-center gap-2 text-2xl font-black">
-          <span className="grid size-10 place-items-center rounded-full bg-pink-500 text-white">
-            <Eye size={23} />
+        <span className="display flex min-w-0 items-center gap-2 text-xl font-black sm:text-2xl">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-pink-500 text-white sm:size-10">
+            <Eye size={21} />
           </span>
-          {t("brand")}
+          <span className="truncate">{t("brand")}</span>
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <a href={`/${locale}/login`} className="pill pill-secondary">
             {t("landing.login")}
           </a>
