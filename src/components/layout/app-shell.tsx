@@ -1,5 +1,6 @@
 import { Eye, Gamepad2, UserRound } from "lucide-react";
 
+import { LocaleSwitcher } from "@/components/layout/locale-switcher";
 import { getUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -33,6 +34,7 @@ export async function AppShell({
             Secrets
           </a>
           <div className="flex items-center gap-2">
+            <LocaleSwitcher />
             <a className="pill bg-white text-sm" href={`/${locale}/games`}>
               <Gamepad2 size={18} /> My games
             </a>
