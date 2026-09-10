@@ -589,6 +589,7 @@
     "duplicateLabel": "Duplicate round",
     "editLabel": "Edit round settings",
     "advanced": "Advanced economy & buzz",
+    "buzzersLegend": "Buzzers",
     "accusationCost": "Accusation buzz cost",
     "hintCost": "Hint cost",
     "transferPct": "Correct-buzz transfer %",
