@@ -179,6 +179,8 @@
     "queue": "+{count} in queue",
     "awaitRuling": "Stays on screen until the host validates the answer",
     "sound": "Toggle sound",
+    "fullscreen": "Full screen",
+    "fullscreenExit": "Exit full screen",
     "onBuzzer": "On the buzzer",
     "faceOff": "Face-off",
     "awaitingRuling": "Awaiting the host's ruling",

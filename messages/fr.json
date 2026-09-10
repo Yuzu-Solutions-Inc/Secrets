@@ -179,6 +179,8 @@
     "queue": "+{count} en file",
     "awaitRuling": "Reste à l’écran jusqu’à la validation de l’hôte",
     "sound": "Activer le son",
+    "fullscreen": "Plein écran",
+    "fullscreenExit": "Quitter le plein écran",
     "onBuzzer": "Au buzzer",
     "faceOff": "Confrontation",
     "awaitingRuling": "En attente de la décision de l’hôte",

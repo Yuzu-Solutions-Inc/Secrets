@@ -1,6 +1,6 @@
 "use client";
 
-import { Clapperboard, Lightbulb, Maximize2, Megaphone, PartyPopper, ShieldQuestion, Siren, Sparkles, Timer, Unlock, Volume2, VolumeX, Zap } from "lucide-react";
+import { Clapperboard, Lightbulb, Maximize2, Megaphone, Minimize2, PartyPopper, ShieldQuestion, Siren, Sparkles, Timer, Unlock, Volume2, VolumeX, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -66,6 +66,7 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
   const [alarm, setAlarm] = useState(false);
   const [verdictCard, setVerdictCard] = useState<Verdict | null>(null);
   const [takeover, setTakeover] = useState<Row | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
   const fetchingRef = useRef(false);
@@ -137,6 +138,15 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
     }
     setShowOpening(true);
   }, [gameStatus, gameId, recentEvents.length]);
+
+  // Keep the fullscreen toggle's icon/label in sync with the actual state —
+  // the user can also leave fullscreen with Esc or the browser chrome.
+  useEffect(() => {
+    const sync = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    sync();
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
 
   const supabase = useCallback(() => {
     if (!supabaseRef.current) supabaseRef.current = createClient();
@@ -588,12 +598,17 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
             <button
               onClick={() => {
                 ensureAudio();
-                void document.documentElement.requestFullscreen().catch(() => {});
+                if (document.fullscreenElement) {
+                  void document.exitFullscreen().catch(() => {});
+                } else {
+                  void document.documentElement.requestFullscreen().catch(() => {});
+                }
               }}
-              aria-label={t("fullscreen")}
+              aria-label={isFullscreen ? t("fullscreenExit") : t("fullscreen")}
+              aria-pressed={isFullscreen}
               className="grid size-[clamp(40px,4vw,56px)] shrink-0 place-items-center rounded-full bg-white text-[color:var(--ink)] ring-1 ring-[var(--border)] shadow-sm"
             >
-              <Maximize2 className="size-1/2" />
+              {isFullscreen ? <Minimize2 className="size-1/2" /> : <Maximize2 className="size-1/2" />}
             </button>
             <button
               onClick={() => {
