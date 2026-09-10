@@ -499,6 +499,7 @@
     "balances": "Cagnottes de la maison",
     "clue": "Nouvel indice",
     "waiting": "Le prochain rebondissement arrive…",
+    "paused": "En pause",
     "accusation": "Accusation",
     "queue": "+{count} en file",
     "awaitRuling": "Reste à l’écran jusqu’à la validation de l’hôte",

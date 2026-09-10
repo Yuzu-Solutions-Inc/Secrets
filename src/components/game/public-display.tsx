@@ -339,8 +339,14 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
     [],
   );
 
+  const roundPaused = String(round?.status ?? "") === "paused";
   const end = round?.ends_at ? new Date(String(round.ends_at)).getTime() : null;
-  const remaining = end && now ? Math.max(0, Math.floor((end - now) / 1000)) : null;
+  const liveRemaining = end && now ? Math.max(0, Math.floor((end - now) / 1000)) : null;
+  // Paused rounds freeze on the snapshot host_transition wrote at pause time;
+  // ends_at is not advanced until the host resumes.
+  const pausedLeft =
+    round && round.paused_seconds_left != null ? Number(round.paused_seconds_left) : null;
+  const remaining = roundPaused ? pausedLeft ?? liveRemaining : liveRemaining;
 
   const statusLabel = (status: string) => {
     if (status === "confrontation") return t("faceOff");
@@ -572,9 +578,10 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
             <div className="text-right">
               <p className="text-[clamp(.7rem,1.3vw,1.05rem)] font-black uppercase tracking-[.2em] text-pink-600">
                 {String(round?.title ?? t("waiting"))}
+                {roundPaused ? <span className="ml-2 text-[color:var(--muted)]">· {t("paused")}</span> : null}
               </p>
               {remaining !== null ? (
-                <div className="mt-[4px] flex items-center justify-end gap-[clamp(.4rem,1vw,.75rem)] text-[color:var(--ink)]">
+                <div className={`mt-[4px] flex items-center justify-end gap-[clamp(.4rem,1vw,.75rem)] text-[color:var(--ink)] ${roundPaused ? "opacity-60" : ""}`}>
                   <Timer className="size-[clamp(1.4rem,2.6vw,2.4rem)] text-pink-500" />
                   <span className="display text-[clamp(1.9rem,4.4vw,3.75rem)] font-black tabular-nums leading-none">
                     {String(Math.floor(remaining / 60)).padStart(2, "0")}:{String(remaining % 60).padStart(2, "0")}

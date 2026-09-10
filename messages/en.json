@@ -499,6 +499,7 @@
     "balances": "House balances",
     "clue": "New clue",
     "waiting": "The next twist is coming…",
+    "paused": "Paused",
     "accusation": "Accusation",
     "queue": "+{count} in queue",
     "awaitRuling": "Stays on screen until the host validates the answer",

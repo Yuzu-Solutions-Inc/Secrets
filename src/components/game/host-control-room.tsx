@@ -388,7 +388,12 @@ export function HostControlRoom({
       {(() => {
         const paused = currentRound?.status === "paused";
         const endsAt = currentRound?.ends_at ? new Date(String(currentRound.ends_at)).getTime() : null;
-        const remaining = endsAt ? Math.max(0, Math.floor((endsAt - now) / 1000)) : null;
+        const liveRemaining = endsAt ? Math.max(0, Math.floor((endsAt - now) / 1000)) : null;
+        // While paused, ends_at is stale — freeze on the seconds snapshotted
+        // when the host hit pause (host_transition writes paused_seconds_left).
+        const pausedLeft =
+          currentRound?.paused_seconds_left != null ? Number(currentRound.paused_seconds_left) : null;
+        const remaining = paused ? pausedLeft ?? liveRemaining : liveRemaining;
         return (
           <div className="bubble-card mt-6 flex flex-wrap items-center gap-3 p-3">
             <div className="min-w-0 flex-1">
