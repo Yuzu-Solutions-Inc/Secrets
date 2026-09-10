@@ -54,13 +54,15 @@ export function GameShowOpening({
 
   // Each player holds the solo spotlight for a full 3 seconds.
   const perPlayerMs = reducedMotion ? 1200 : 3000;
-  // Punchy lines flash one at a time — each rises in, holds, then clears as the
-  // next arrives.
-  const wordMs = reducedMotion ? 340 : 1000;
+  // Punchy lines flash one at a time — each rises in, holds long enough to
+  // read, then clears as the next arrives.
+  const wordMs = reducedMotion ? 440 : 1300;
 
+  // The intro title + game title are kept tight (~1s shorter than they'd
+  // naturally hold) so the roster's solo spotlights land on the music's drop.
   const durations: Record<Phase, number> = reducedMotion
     ? { presents: 900, title: 1400, words: Math.max(1200, words.length * wordMs + 400), solo: 0, all: 1400, begin: 1300 }
-    : { presents: 3000, title: 3400, words: Math.max(2800, words.length * wordMs + 900), solo: 0, all: 2600, begin: 3200 };
+    : { presents: 2500, title: 2900, words: Math.max(2800, words.length * wordMs + 900), solo: 0, all: 2600, begin: 3200 };
 
   const [phase, setPhase] = useState<Phase>("presents");
   const [soloIndex, setSoloIndex] = useState(0);
@@ -186,7 +188,7 @@ export function GameShowOpening({
         @keyframes gsoRise { 0% { transform: translateY(28px) scale(.94); opacity: 0 } 100% { transform: translateY(0) scale(1); opacity: 1 } }
         @keyframes gsoSlam { 0% { transform: scale(2.4); opacity: 0; filter: blur(14px) } 55% { transform: scale(.94); opacity: 1; filter: blur(0) } 75% { transform: scale(1.05) } 100% { transform: scale(1) } }
         @keyframes gsoPop { 0% { transform: scale(.4) rotate(-6deg); opacity: 0 } 60% { transform: scale(1.12) rotate(1deg) } 100% { transform: scale(1) rotate(0); opacity: 1 } }
-        @keyframes gsoWordIn { 0% { transform: translateY(42px) skewX(-9deg); opacity: 0 } 15% { transform: translateY(0) skewX(0); opacity: 1 } 80% { opacity: 1; transform: translateY(0) } 100% { opacity: 0; transform: translateY(-22px) } }
+        @keyframes gsoWordIn { 0% { transform: translateY(34px) skewX(-7deg); opacity: 0 } 20% { transform: translateY(0) skewX(0); opacity: 1 } 74% { opacity: 1; transform: translateY(0) } 100% { opacity: 0; transform: translateY(-18px) } }
         @keyframes gsoCardIn { 0% { transform: translateX(120px) rotate(6deg); opacity: 0 } 70% { transform: translateX(-8px) rotate(-1deg) } 100% { transform: translateX(0) rotate(0); opacity: 1 } }
         @keyframes gsoSoloIn { 0% { transform: scale(.7) translateY(30px); opacity: 0 } 60% { transform: scale(1.04) } 100% { transform: scale(1) translateY(0); opacity: 1 } }
         @keyframes gsoNameIn { 0% { transform: translateY(24px); opacity: 0; letter-spacing: .3em } 100% { transform: translateY(0); opacity: 1; letter-spacing: normal } }
@@ -198,7 +200,7 @@ export function GameShowOpening({
         .gso-slam { animation: gsoSlam .8s cubic-bezier(.2,1.3,.3,1) both }
         .gso-pop { animation: gsoPop .6s cubic-bezier(.2,1.5,.3,1) both }
         .gso-glow { animation: gsoGlow 2.4s ease-in-out infinite }
-        .gso-word { animation: gsoWordIn 850ms cubic-bezier(.2,1,.3,1) both }
+        .gso-word { animation: gsoWordIn 1300ms ease-in-out both }
         .gso-card { animation: gsoCardIn .62s cubic-bezier(.2,1.2,.3,1) both }
         .gso-solo { animation: gsoSoloIn .55s cubic-bezier(.2,1.4,.3,1) both }
         .gso-name { animation: gsoNameIn .5s cubic-bezier(.2,1,.3,1) both }
