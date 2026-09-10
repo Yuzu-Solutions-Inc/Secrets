@@ -1129,10 +1129,16 @@ export function HostControlRoom({
                   {((mission.mission_assignments as Row[] | undefined) ?? []).map((assignment) => {
                     const assignedPlayer = assignment.game_players as Row | null;
                     const assignedProfile = assignedPlayer?.profiles as Row | null;
+                    const resolved = status === "approved" || status === "failed";
                     return (
                       <div key={String(assignment.id)} className="mt-4 rounded-xl bg-pink-50 p-3">
-                        <p className="text-sm font-bold">{String(assignedProfile?.display_name ?? tc("player"))} · {assignment.submitted_at ? t("submitted") : t("inProgress")}</p>
-                        {assignment.submitted_at ? (
+                        <p className="text-sm font-bold">
+                          {String(assignedProfile?.display_name ?? tc("player"))} ·{" "}
+                          {resolved
+                            ? status === "approved" ? t("resultApproved") : t("resultFailed")
+                            : assignment.submitted_at ? t("submitted") : t("inProgress")}
+                        </p>
+                        {assignment.submitted_at && !resolved ? (
                           <div className="mt-2 grid grid-cols-2 gap-2">
                             {(["approved", "failed"] as const).map((result) => (
                               <ActionForm
