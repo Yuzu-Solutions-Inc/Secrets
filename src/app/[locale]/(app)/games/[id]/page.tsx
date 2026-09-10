@@ -55,7 +55,7 @@ export default async function GamePage({
         .eq("missions.game_id", id),
       supabase
         .from("hint_grants")
-        .select("id,scope,source,hints(id,kind,text,asset_path,secret_id)")
+        .select("id,scope,source,hints(id,kind,text,asset_path,image_ref,secret_id)")
         .eq("player_id", currentPlayer.id),
       supabase.from("theory_notes").select("id,body,target_player_id,updated_at").eq("player_id", currentPlayer.id),
       round

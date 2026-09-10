@@ -65,6 +65,7 @@ import { formatMoney } from "@/lib/utils";
 import { secretCategories } from "@/lib/game/templates";
 import { Avatar } from "./avatar";
 import { BroadcastComposer } from "./broadcast-composer";
+import { HintIcon } from "./hint-icon";
 import { RoundSchedule } from "./round-schedule";
 import { WhitelistManager } from "./whitelist-manager";
 
@@ -898,6 +899,8 @@ export function HostControlRoom({
                                   {hint.asset_path ? (
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img src={`/api/assets/hints/${String(hint.id)}`} alt={t("imageHint")} className="max-h-32 rounded-xl" />
+                                  ) : hint.image_ref ? (
+                                    <HintIcon refValue={String(hint.image_ref)} className="flex w-fit items-center justify-center rounded-xl bg-pink-50 p-3" />
                                   ) : null}
                                   <div className="mt-1 flex items-center gap-3 text-xs">
                                     <span className="text-[var(--muted)]">#{Number(hint.position) + 1}{hint.released_at ? ` · ${t("releasedTag")}` : ""}</span>

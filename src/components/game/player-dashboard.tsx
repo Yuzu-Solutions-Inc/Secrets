@@ -40,6 +40,7 @@ import { castVote } from "@/app/actions/admin";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
 import { Avatar } from "./avatar";
+import { HintIcon, isIconHint } from "./hint-icon";
 
 type Player = {
   id: string;
@@ -54,6 +55,7 @@ type VaultHint = {
   kind: string;
   text: string | null;
   has_image?: boolean;
+  image_ref?: string | null;
   position: number;
   about_player_id: string | null;
   about_player_name: string | null;
@@ -476,7 +478,9 @@ export function PlayerDashboard(props: Props) {
                   {selectedHints.map((hint) => (
                     <li key={hint.id} className="space-y-2 rounded-2xl bg-amber-50 p-3 text-sm">
                       {hint.text ? <p>{hint.text}</p> : null}
-                      {hint.has_image || hint.kind === "image" ? (
+                      {isIconHint(hint) ? (
+                        <HintIcon refValue={hint.image_ref} className="flex items-center justify-center rounded-xl bg-white/70 py-6" />
+                      ) : hint.has_image || hint.kind === "image" ? (
                         <Image
                           className="h-auto w-full rounded-xl"
                           src={`/api/assets/hints/${hint.id}`}
@@ -990,7 +994,9 @@ function MyGame(props: MyGameProps) {
               return (
                 <details key={String(grant.id)} className="rounded-2xl bg-amber-50 p-4">
                   <summary className="cursor-pointer font-bold">{String(hint?.text ?? t("imageHint"))}</summary>
-                  {hint?.asset_path || hint?.kind === "image" ? (
+                  {isIconHint(hint as { image_ref?: string | null; asset_path?: string | null } | undefined) ? (
+                    <HintIcon refValue={hint?.image_ref as string | null | undefined} className="mt-3 flex items-center justify-center rounded-xl bg-white/70 py-8" />
+                  ) : hint?.asset_path || hint?.kind === "image" ? (
                     <Image
                       className="mt-3 h-auto w-full rounded-xl"
                       src={`/api/assets/hints/${String(hint.id)}`}
