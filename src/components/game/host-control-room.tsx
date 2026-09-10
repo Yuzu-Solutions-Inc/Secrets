@@ -589,32 +589,60 @@ export function HostControlRoom({
                     return (
                       <div key={String(team.id)} className="rounded-2xl bg-pink-50 p-4">
                         <p className="font-black">{String(team.name)}</p>
-                        <p className="text-sm text-[var(--muted)]">{formatMoney(Number(walletRows?.[0]?.balance ?? 0), String(game.currency_symbol))} · {memberRows.length} member{memberRows.length === 1 ? "" : "s"}</p>
-                        <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                          {memberRows.map((m) => String(((m.game_players as Row | null)?.profiles as Row | null)?.display_name ?? tc("player"))).join(", ") || t("noMembers")}
-                        </p>
-                        <details className="mt-2">
+                        <p className="text-sm text-[var(--muted)]">{formatMoney(Number(walletRows?.[0]?.balance ?? 0), String(game.currency_symbol))} · {t("memberCount", { count: memberRows.length })}</p>
+
+                        {memberRows.length ? (
+                          <ul className="mt-2 space-y-1">
+                            {memberRows.map((m) => {
+                              const memberName = String(((m.game_players as Row | null)?.profiles as Row | null)?.display_name ?? tc("player"));
+                              const choice = m.dilemma_choice ? String(m.dilemma_choice) : null;
+                              return (
+                                <li key={String(m.player_id)} className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="min-w-0 truncate font-bold">{memberName}</span>
+                                  <span className={`shrink-0 rounded-full px-2 py-0.5 font-black ${
+                                    choice === "steal"
+                                      ? "bg-red-100 text-red-700"
+                                      : choice === "share"
+                                        ? "bg-emerald-100 text-emerald-800"
+                                        : "bg-[var(--muted-bg,#eee)] text-[var(--muted)]"
+                                  }`}>
+                                    {choice === "steal" ? tp("steal") : choice === "share" ? tp("share") : t("choicePending")}
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="mt-1 text-xs text-[var(--muted)]">{t("noMembers")}</p>
+                        )}
+
+                        <details className="mt-3">
                           <summary className="cursor-pointer text-xs font-bold text-pink-600">{t("editMembers")}</summary>
-                          <ActionForm action={setTeamMembers} success={t("saveMembers")} className="mt-2 grid gap-2">
+                          <ActionForm action={setTeamMembers} success={t("saveMembers")} className="mt-2 space-y-2">
                             <input type="hidden" name="locale" value={locale} />
                             <input type="hidden" name="gameId" value={String(game.id)} />
                             <input type="hidden" name="teamId" value={String(team.id)} />
-                            <div className="grid grid-cols-2 gap-1">
+                            <div className="space-y-1">
                               {players.map((player) => {
                                 const profile = player.profiles as Row | null;
                                 const isMember = memberRows.some((m) => String(m.player_id) === String(player.id));
-                                return <label key={String(player.id)} className="rounded-lg bg-white p-1.5 text-xs"><input className="mr-1.5" type="checkbox" name="playerIds" value={String(player.id)} defaultChecked={isMember} />{String(profile?.display_name ?? tc("player"))}</label>;
+                                return (
+                                  <label key={String(player.id)} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm">
+                                    <input className="size-4 shrink-0 accent-pink-600" type="checkbox" name="playerIds" value={String(player.id)} defaultChecked={isMember} />
+                                    <span className="truncate">{String(profile?.display_name ?? tc("player"))}</span>
+                                  </label>
+                                );
                               })}
                             </div>
-                            <button className="pill pill-secondary h-8 w-fit text-xs">{t("saveMembers")}</button>
+                            <button className="pill pill-secondary w-full text-sm">{t("saveMembers")}</button>
                           </ActionForm>
                         </details>
-                        <div className="mt-2 flex flex-wrap gap-2">
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
                           <ActionForm action={settleTeamDilemma} success={t("revealSettle")}>
                             <input type="hidden" name="locale" value={locale} />
                             <input type="hidden" name="gameId" value={String(game.id)} />
                             <input type="hidden" name="teamId" value={String(team.id)} />
-                            <button className="pill pill-secondary h-8 text-xs">{t("revealSettle")}</button>
+                            <button className="pill pill-secondary h-9 text-xs">{t("revealSettle")}</button>
                           </ActionForm>
                           <ActionForm action={deleteTeam} success={tc("delete")} confirm={`${tc("delete")} — ${String(team.name)}?`}>
                             <input type="hidden" name="locale" value={locale} />

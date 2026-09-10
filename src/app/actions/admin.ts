@@ -173,7 +173,17 @@ export async function settleTeamDilemma(formData: FormData) {
   const parsed = base.extend({ teamId: z.string().uuid() }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
   const { error } = await supabase.rpc("settle_team_dilemma", { p_team_id: parsed.teamId });
-  if (error) throw new Error(error.message);
+  if (error) {
+    const fr = parsed.locale === "fr";
+    if (error.message.includes("choices_incomplete")) {
+      throw new Error(
+        fr
+          ? "Chaque membre doit d'abord choisir Partager ou Voler."
+          : "Every member has to choose Share or Steal first.",
+      );
+    }
+    throw new Error(fr ? "Le règlement du dilemme a échoué." : "Settling the dilemma didn't go through.");
+  }
   refresh(parsed.locale, parsed.gameId);
 }
 

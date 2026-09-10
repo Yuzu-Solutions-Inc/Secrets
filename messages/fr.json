@@ -304,6 +304,8 @@
     "teams": "Équipes",
     "teamsBlurb": "Un seul jeu d’équipes pour toute la partie. Modifiez les membres à tout moment; les manches en équipe utilisent la composition du moment.",
     "noMembers": "Aucun membre",
+    "memberCount": "{count, plural, one {# membre} other {# membres}}",
+    "choicePending": "Pas choisi",
     "editMembers": "Modifier les membres",
     "saveMembers": "Enregistrer les membres",
     "revealSettle": "Révéler et régler le dilemme",

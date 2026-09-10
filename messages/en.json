@@ -304,6 +304,8 @@
     "teams": "Teams",
     "teamsBlurb": "One set of teams for the whole game. Edit membership any time; team rounds use whatever the teams are then.",
     "noMembers": "No members",
+    "memberCount": "{count, plural, one {# member} other {# members}}",
+    "choicePending": "Not chosen",
     "editMembers": "Edit members",
     "saveMembers": "Save members",
     "revealSettle": "Reveal & settle dilemma",
