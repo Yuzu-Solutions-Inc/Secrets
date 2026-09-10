@@ -250,6 +250,9 @@
     "display": "Ouvrir l’écran TV",
     "lock": "Verrouiller les secrets",
     "nextRound": "Lancer la prochaine manche",
+    "startGame": "Lancer la partie",
+    "startFinal": "Lancer la finale",
+    "finishGame": "Terminer la partie",
     "currentRound": "Manche en cours"
   },
   "display": {

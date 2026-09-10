@@ -21,6 +21,7 @@ import {
 import { Copy, GripVertical, Settings2 } from "lucide-react";
 
 import { addRound, deleteRound, duplicateRound, reorderRounds, updateRound } from "@/app/actions/admin";
+import { ActionForm } from "./action-form";
 
 type Row = Record<string, unknown>;
 
@@ -102,7 +103,7 @@ export function RoundSchedule({
 
   return (
     <div className="space-y-4">
-      <form action={addRound} className="bubble-card grid gap-3 p-5">
+      <ActionForm action={addRound} success="Round added" className="bubble-card grid gap-3 p-5">
         <input type="hidden" name="locale" value={locale} />
         <input type="hidden" name="gameId" value={gameId} />
         <div>
@@ -145,7 +146,7 @@ export function RoundSchedule({
           </label>
           <button className="pill pill-primary h-10">Add round</button>
         </div>
-      </form>
+      </ActionForm>
 
       <DndContext
         sensors={sensors}
@@ -220,7 +221,7 @@ function RoundRow({
         ? "current"
         : isNext
           ? "next"
-          : "upcoming";
+          : null;
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: rid,
@@ -257,34 +258,34 @@ function RoundRow({
             {kind.replaceAll("_", " ")} · {Number(cfg.durationMinutes ?? 0)} min
           </p>
         </div>
-        <span
-          className={`shrink-0 rounded-full px-2 py-1 text-xs font-black ${
-            stage === "current"
-              ? "bg-emerald-100 text-emerald-800"
-              : stage === "next"
-                ? "bg-pink-100 text-pink-800"
-                : stage === "finished"
-                  ? "bg-[var(--muted-bg,#eee)] text-[var(--muted)]"
-                  : stage === "cancelled"
-                    ? "bg-red-100 text-red-800"
-                    : "bg-white text-[var(--muted)] ring-1 ring-[var(--border)]"
-          }`}
-        >
-          {stage}
-        </span>
+        {stage ? (
+          <span
+            className={`shrink-0 rounded-full px-2 py-1 text-xs font-black ${
+              stage === "current"
+                ? "bg-emerald-100 text-emerald-800"
+                : stage === "next"
+                  ? "bg-pink-100 text-pink-800"
+                  : stage === "finished"
+                    ? "bg-[var(--muted-bg,#eee)] text-[var(--muted)]"
+                    : "bg-red-100 text-red-800"
+            }`}
+          >
+            {stage}
+          </span>
+        ) : null}
         {isFinale ? (
           <span className="shrink-0 rounded-full bg-violet-100 px-2 py-1 text-xs font-black text-violet-800">final</span>
         ) : null}
         <div className="flex shrink-0 gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
           {!isFinale ? (
-            <form action={duplicateRound}>
+            <ActionForm action={duplicateRound} success="Round duplicated">
               <input type="hidden" name="locale" value={locale} />
               <input type="hidden" name="gameId" value={gameId} />
               <input type="hidden" name="roundId" value={rid} />
               <button className="grid size-8 place-items-center rounded-full bg-pink-50 hover:bg-pink-100" aria-label="Duplicate round" title="Duplicate round">
                 <Copy size={14} />
               </button>
-            </form>
+            </ActionForm>
           ) : null}
           <button
             type="button"
@@ -299,7 +300,7 @@ function RoundRow({
       </div>
 
       {editing ? (
-        <form action={updateRound} className="grid gap-3 border-t border-pink-100 bg-pink-50/30 p-4">
+        <ActionForm action={updateRound} success="Round saved" className="grid gap-3 border-t border-pink-100 bg-pink-50/30 p-4">
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="gameId" value={gameId} />
           <input type="hidden" name="roundId" value={rid} />
@@ -402,16 +403,21 @@ function RoundRow({
             <button className="pill pill-primary h-9 text-xs">Save round</button>
             {!isFuture ? <span className="text-xs text-[var(--muted)]">Only future rounds can be deleted.</span> : null}
           </div>
-        </form>
+        </ActionForm>
       ) : null}
 
       {editing && isFuture ? (
-        <form action={deleteRound} className="border-t border-pink-100 bg-pink-50/30 px-4 pb-4 pt-3">
+        <ActionForm
+          action={deleteRound}
+          success="Round deleted"
+          confirm="Delete this round?"
+          className="border-t border-pink-100 bg-pink-50/30 px-4 pb-4 pt-3"
+        >
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="gameId" value={gameId} />
           <input type="hidden" name="roundId" value={rid} />
           <button className="pill h-9 bg-red-500 text-xs text-white">Delete round</button>
-        </form>
+        </ActionForm>
       ) : null}
     </div>
   );

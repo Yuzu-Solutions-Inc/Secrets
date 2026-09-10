@@ -250,6 +250,9 @@
     "display": "Open TV dashboard",
     "lock": "Lock secrets",
     "nextRound": "Start next round",
+    "startGame": "Start game",
+    "startFinal": "Start final",
+    "finishGame": "Finish game",
     "currentRound": "Current round"
   },
   "display": {

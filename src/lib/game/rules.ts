@@ -123,8 +123,19 @@ export const dilemmaEffectSchema = z.discriminatedUnion("type", [
     recipients: z.enum(["responder", "all"]),
     minutes: z.number().int().positive().max(180),
   }),
+  z.object({
+    type: z.literal("power"),
+    power: z.enum(["double-vote", "immunity", "buzz-shield"]),
+    recipients: z.enum(["responder", "all"]),
+  }),
 ]);
 export type DilemmaEffect = z.infer<typeof dilemmaEffectSchema>;
+
+export const POWER_EFFECT_LABELS: Record<"double-vote" | "immunity" | "buzz-shield", string> = {
+  "double-vote": "2 votes",
+  immunity: "Immunity",
+  "buzz-shield": "Buzz shield",
+};
 
 export const dilemmaEffectsSchema = z.array(dilemmaEffectSchema).max(6);
 
@@ -139,6 +150,8 @@ export function summarizeDilemmaEffect(effect: DilemmaEffect): string {
       return `Free buzz for ${who}`;
     case "buzz_immunity":
       return `Buzz immunity for ${who} (${effect.minutes} min)`;
+    case "power":
+      return `${POWER_EFFECT_LABELS[effect.power]} for ${who}`;
   }
 }
 

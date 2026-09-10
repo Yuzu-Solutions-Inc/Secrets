@@ -59,6 +59,7 @@ import {
   validateMission,
 } from "@/app/actions/admin";
 import { removeFromWhitelist } from "@/app/actions/invitations";
+import { ActionForm } from "./action-form";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
 import { secretCategories } from "@/lib/game/templates";
@@ -252,6 +253,7 @@ export function HostControlRoom({
     () => String((((game.settings as Row | null)?.finale as Row | undefined)?.resolution as Row | undefined)?.method ?? "formula"),
   );
   const [boxChoices, setBoxChoices] = useState<Record<string, "share" | "steal">>({});
+  const [missionScope, setMissionScope] = useState<"none" | "all" | "player" | "team">("none");
 
   // Once the game has started, the invite panel is replaced by the host's
   // money-correction tools (item 11).
@@ -304,6 +306,27 @@ export function HostControlRoom({
   );
 
   const currentRound = rounds.find((round) => round.id === game.current_round_id);
+
+  // Run-of-show advance button: "Start game" before round 1, then
+  // "Start next round", then "Start final" when the finale is what's next.
+  const gameStatus = String(game.status);
+  const preLive = ["draft", "secret_submission", "locked"].includes(gameStatus);
+  const inFinale = gameStatus === "finale";
+  const currentPos = currentRound ? Number(currentRound.position ?? -1) : -1;
+  const scheduledAfter = [...rounds]
+    .filter((round) => String(round.status) === "scheduled" && Number(round.position) > currentPos)
+    .sort((a, b) => Number(a.position) - Number(b.position));
+  const nextIsFinale = scheduledAfter[0]
+    ? String(scheduledAfter[0].kind) === "finale"
+    : rounds.some((round) => String(round.kind) === "finale" && String(round.status) === "scheduled");
+  const advanceLabel = preLive
+    ? t("startGame")
+    : nextIsFinale
+      ? t("startFinal")
+      : scheduledAfter.length === 0
+        ? t("finishGame")
+        : t("nextRound");
+
   // Every hint is sold at the same price — the one set in the base game
   // settings (`hintPrice` in the round config). Show it here so the host
   // isn't asked to price hints one by one.
@@ -375,26 +398,36 @@ export function HostControlRoom({
               </span>
             ) : null}
             <div className="flex shrink-0 items-center gap-2">
-              <form action={hostTransition}>
-                <input type="hidden" name="locale" value={locale} />
-                <input type="hidden" name="gameId" value={String(game.id)} />
-                <input type="hidden" name="action" value="prev_round" />
-                <button className="pill pill-secondary" aria-label="Previous round">◀</button>
-              </form>
-              <form action={hostTransition}>
-                <input type="hidden" name="locale" value={locale} />
-                <input type="hidden" name="gameId" value={String(game.id)} />
-                <input type="hidden" name="action" value={paused ? "resume" : "pause"} />
-                <button className="pill pill-secondary" aria-label={paused ? "Resume" : "Pause"}>
-                  {paused ? <CirclePlay size={18} /> : <Pause size={18} />}
-                </button>
-              </form>
-              <form action={hostTransition}>
-                <input type="hidden" name="locale" value={locale} />
-                <input type="hidden" name="gameId" value={String(game.id)} />
-                <input type="hidden" name="action" value="next_round" />
-                <button className="pill pill-primary"><CirclePlay size={18} /> {t("nextRound")}</button>
-              </form>
+              {!preLive && !inFinale ? (
+                <>
+                  <ActionForm action={hostTransition} success="Moved to previous round">
+                    <input type="hidden" name="locale" value={locale} />
+                    <input type="hidden" name="gameId" value={String(game.id)} />
+                    <input type="hidden" name="action" value="prev_round" />
+                    <button className="pill pill-secondary" aria-label="Previous round">◀</button>
+                  </ActionForm>
+                  <ActionForm action={hostTransition} success={paused ? "Round resumed" : "Round paused"}>
+                    <input type="hidden" name="locale" value={locale} />
+                    <input type="hidden" name="gameId" value={String(game.id)} />
+                    <input type="hidden" name="action" value={paused ? "resume" : "pause"} />
+                    <button className="pill pill-secondary" aria-label={paused ? "Resume" : "Pause"}>
+                      {paused ? <CirclePlay size={18} /> : <Pause size={18} />}
+                    </button>
+                  </ActionForm>
+                </>
+              ) : null}
+              {!inFinale ? (
+                <ActionForm
+                  action={hostTransition}
+                  success={`${advanceLabel} — done`}
+                  confirm={preLive ? "Start the game now?" : undefined}
+                >
+                  <input type="hidden" name="locale" value={locale} />
+                  <input type="hidden" name="gameId" value={String(game.id)} />
+                  <input type="hidden" name="action" value="next_round" />
+                  <button className="pill pill-primary"><CirclePlay size={18} /> {advanceLabel}</button>
+                </ActionForm>
+              ) : null}
             </div>
             <SecretsLockPill
               locale={locale}
@@ -961,45 +994,89 @@ export function HostControlRoom({
 
         {tab === "missions" ? (
           <div className="space-y-4">
-            <form action={createMission} className="bubble-card grid gap-3 p-5 sm:grid-cols-2">
+            <ActionForm action={createMission} success="Draft mission saved" className="bubble-card grid gap-3 p-5">
               <input type="hidden" name="locale" value={locale} />
               <input type="hidden" name="gameId" value={String(game.id)} />
-              <p className="text-sm text-[var(--muted)] sm:col-span-2">
+              <p className="text-sm text-[var(--muted)]">
                 New missions are saved as a hidden draft. Players only see one after you press <span className="font-bold">Start</span>.
               </p>
-              <input className="field" name="title" placeholder="Mission title" required />
-              <select className="field" name="playerId" defaultValue="">
-                <option value="">No player assignment</option>
-                {players.map((player) => {
-                  const profile = player.profiles as Row | null;
-                  return <option key={String(player.id)} value={String(player.id)}>{String(profile?.display_name ?? "Player")}</option>;
-                })}
-              </select>
-              <select className="field" name="teamId" defaultValue="">
-                <option value="">No team assignment</option>
-                {teams.map((team) => <option key={String(team.id)} value={String(team.id)}>{String(team.name)}</option>)}
-              </select>
-              <label className="flex items-center gap-2 font-bold sm:col-span-2"><input type="checkbox" name="assignAll" /> Assign to all active players (overrides the player/team picks)</label>
-              <textarea className="field min-h-24 sm:col-span-2" name="instructions" placeholder="Secret instructions…" required />
-              <select className="field" name="visibility" defaultValue="private">
-                <option value="private">Private</option><option value="team">Team</option><option value="public">Public</option>
-              </select>
-              <label className="grid gap-1">
-                <span className="text-xs font-bold text-[var(--muted)]">Timer — minutes (0 = none)</span>
-                <input className="field" name="timerMinutes" type="number" min="0" max="1440" defaultValue="0" />
+
+              <label className="text-xs font-bold">
+                Mission title
+                <input className="field mt-1" name="title" placeholder="The forbidden word" required />
               </label>
-              <div className="grid grid-cols-2 gap-3 sm:col-span-2">
-                <label className="grid gap-1">
-                  <span className="text-xs font-bold text-emerald-700">Reward — paid to the player when you approve</span>
-                  <input className="field" name="reward" type="number" min="0" defaultValue="1000" />
+
+              <label className="text-xs font-bold">
+                Secret instructions
+                <textarea className="field mt-1 min-h-24" name="instructions" placeholder="What the player has to pull off, without anyone catching on…" required />
+              </label>
+
+              <div className="grid gap-3 sm:grid-cols-[12rem_1fr] sm:items-start">
+                <label className="text-xs font-bold">
+                  Who does it
+                  <select
+                    className="field mt-1"
+                    value={missionScope}
+                    onChange={(e) => setMissionScope(e.target.value as typeof missionScope)}
+                  >
+                    <option value="none">Nobody yet</option>
+                    <option value="all">All active players</option>
+                    <option value="player">One player</option>
+                    <option value="team">A team</option>
+                  </select>
                 </label>
-                <label className="grid gap-1">
-                  <span className="text-xs font-bold text-red-700">Penalty — charged to the player if it fails</span>
-                  <input className="field" name="penalty" type="number" min="0" defaultValue="0" />
+                {missionScope === "all" ? <input type="hidden" name="assignAll" value="on" /> : null}
+                {missionScope === "player" ? (
+                  <label className="text-xs font-bold">
+                    Player
+                    <select className="field mt-1" name="playerId" defaultValue="" required>
+                      <option value="" disabled>Choose a player…</option>
+                      {players.map((player) => {
+                        const profile = player.profiles as Row | null;
+                        return <option key={String(player.id)} value={String(player.id)}>{String(profile?.display_name ?? "Player")}</option>;
+                      })}
+                    </select>
+                  </label>
+                ) : null}
+                {missionScope === "team" ? (
+                  <label className="text-xs font-bold">
+                    Team
+                    <select className="field mt-1" name="teamId" defaultValue="" required>
+                      <option value="" disabled>Choose a team…</option>
+                      {teams.map((team) => <option key={String(team.id)} value={String(team.id)}>{String(team.name)}</option>)}
+                    </select>
+                  </label>
+                ) : null}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-bold">
+                  Who can see it
+                  <select className="field mt-1" name="visibility" defaultValue="private">
+                    <option value="private">Private</option>
+                    <option value="team">Team</option>
+                    <option value="public">Public</option>
+                  </select>
+                </label>
+                <label className="text-xs font-bold">
+                  Timer — minutes (0 = none)
+                  <input className="field mt-1" name="timerMinutes" type="number" min="0" max="1440" defaultValue="0" />
                 </label>
               </div>
-              <button className="pill pill-primary sm:col-span-2">Create draft mission</button>
-            </form>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-bold text-emerald-700">
+                  Reward — paid to the player when you approve
+                  <input className="field mt-1" name="reward" type="number" min="0" defaultValue="1000" />
+                </label>
+                <label className="text-xs font-bold text-red-700">
+                  Penalty — charged to the player if it fails
+                  <input className="field mt-1" name="penalty" type="number" min="0" defaultValue="0" />
+                </label>
+              </div>
+
+              <button className="pill pill-primary w-fit"><Sparkles size={16} /> Save draft mission</button>
+            </ActionForm>
             <div className="grid gap-3 sm:grid-cols-2">
               {missions.map((mission) => {
                 const status = String(mission.status);
@@ -1034,14 +1111,14 @@ export function HostControlRoom({
                     )}
                   </div>
                   {isDraft ? (
-                    <form action={startMission} className="mt-4">
+                    <ActionForm action={startMission} success="Mission is live" className="mt-4">
                       <input type="hidden" name="locale" value={locale} />
                       <input type="hidden" name="gameId" value={String(game.id)} />
                       <input type="hidden" name="missionId" value={String(mission.id)} />
                       <button className="pill pill-primary inline-flex w-full items-center justify-center gap-2">
                         <CirclePlay size={16} /> Start mission
                       </button>
-                    </form>
+                    </ActionForm>
                   ) : null}
                   {((mission.mission_assignments as Row[] | undefined) ?? []).map((assignment) => {
                     const assignedPlayer = assignment.game_players as Row | null;
@@ -1052,14 +1129,18 @@ export function HostControlRoom({
                         {assignment.submitted_at ? (
                           <div className="mt-2 grid grid-cols-2 gap-2">
                             {(["approved", "failed"] as const).map((result) => (
-                              <form action={validateMission} key={result}>
+                              <ActionForm
+                                action={validateMission}
+                                key={result}
+                                success={result === "approved" ? "Mission approved — reward paid" : "Mission failed — penalty charged"}
+                              >
                                 <input type="hidden" name="locale" value={locale} />
                                 <input type="hidden" name="gameId" value={String(game.id)} />
                                 <input type="hidden" name="missionId" value={String(mission.id)} />
                                 <input type="hidden" name="playerId" value={String(assignment.player_id)} />
                                 <input type="hidden" name="result" value={result} />
                                 <button className={`pill w-full ${result === "approved" ? "pill-primary" : "pill-secondary"}`}>{result}</button>
-                              </form>
+                              </ActionForm>
                             ))}
                           </div>
                         ) : null}
