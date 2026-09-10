@@ -20,7 +20,9 @@ export type OpeningPlayer = {
   avatarSrc: string;
 };
 
-type Phase = "presents" | "title" | "words" | "solo" | "all" | "begin" | "exit";
+type Phase = "presents" | "title" | "words" | "solo" | "all" | "begin";
+
+const PHASE_ORDER: Phase[] = ["presents", "title", "words", "solo", "all", "begin"];
 
 export function GameShowOpening({
   brand,
@@ -49,23 +51,29 @@ export function GameShowOpening({
 
   // Each player holds the solo spotlight for a full 3 seconds.
   const perPlayerMs = reducedMotion ? 1200 : 3000;
-  const wordMs = reducedMotion ? 260 : 640;
+  const wordMs = reducedMotion ? 320 : 950;
 
-  const durations: Record<Exclude<Phase, "exit">, number> = reducedMotion
-    ? { presents: 900, title: 1400, words: 900, solo: 0, all: 1400, begin: 1300 }
-    : { presents: 3000, title: 3400, words: Math.max(2400, words.length * wordMs + 500), solo: 0, all: 2600, begin: 3200 };
+  const durations: Record<Phase, number> = reducedMotion
+    ? { presents: 900, title: 1400, words: Math.max(1200, words.length * wordMs + 400), solo: 0, all: 1400, begin: 1300 }
+    : { presents: 3000, title: 3400, words: Math.max(2800, words.length * wordMs + 900), solo: 0, all: 2600, begin: 3200 };
 
   const [phase, setPhase] = useState<Phase>("presents");
   const [soloIndex, setSoloIndex] = useState(0);
+  const [exiting, setExiting] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [needsTap, setNeedsTap] = useState(false);
   const doneRef = useRef(false);
 
+  // Skip or natural end: freeze on the current scene, fade the audio and the
+  // whole overlay, then hand control to the dashboard underneath. `phase` is
+  // left where it is so the fade never flashes a different scene. `onDone` is
+  // stable (see PublicDisplay) so this stays referentially stable and the
+  // sequencer below is not torn down on the parent's every re-render.
   const finish = useCallback(() => {
     if (doneRef.current) return;
     doneRef.current = true;
-    setPhase("exit");
+    setExiting(true);
     const el = audioRef.current;
     if (el) {
       const fade = window.setInterval(() => {
@@ -100,7 +108,7 @@ export function GameShowOpening({
   // Drive the sequence. The solo phase steps through players on its own clock;
   // every other phase just waits out its duration and hands over.
   useEffect(() => {
-    if (phase === "exit") return;
+    if (exiting) return;
 
     if (phase === "solo") {
       const atEnd = players.length === 0 || soloIndex >= players.length;
@@ -111,15 +119,14 @@ export function GameShowOpening({
       return () => window.clearTimeout(id);
     }
 
-    const order: Array<Exclude<Phase, "exit">> = ["presents", "title", "words", "solo", "all", "begin"];
-    const nextPhase = order[order.indexOf(phase) + 1] ?? null;
+    const nextPhase = PHASE_ORDER[PHASE_ORDER.indexOf(phase) + 1] ?? null;
     const id = window.setTimeout(() => {
       if (nextPhase) setPhase(nextPhase);
       else finish();
-    }, durations[phase as Exclude<Phase, "exit">]);
+    }, durations[phase]);
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, soloIndex, players.length, perPlayerMs, finish]);
+  }, [phase, soloIndex, exiting, players.length, perPlayerMs, finish]);
 
   // Esc skips straight to the dashboard.
   useEffect(() => {
@@ -157,7 +164,7 @@ export function GameShowOpening({
   return (
     <div
       className={`fixed inset-0 z-[60] flex items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_-10%,#7c2d67,#2b0a26_60%,#12040f)] text-white ${
-        phase === "exit" ? "pointer-events-none opacity-0" : "opacity-100"
+        exiting ? "pointer-events-none opacity-0" : "opacity-100"
       }`}
       style={{ transitionProperty: "opacity", transitionDuration: `${EXIT_MS}ms`, transitionTimingFunction: "ease-in" }}
       role="dialog"
@@ -171,7 +178,7 @@ export function GameShowOpening({
         @keyframes gsoRise { 0% { transform: translateY(28px) scale(.94); opacity: 0 } 100% { transform: translateY(0) scale(1); opacity: 1 } }
         @keyframes gsoSlam { 0% { transform: scale(2.4); opacity: 0; filter: blur(14px) } 55% { transform: scale(.94); opacity: 1; filter: blur(0) } 75% { transform: scale(1.05) } 100% { transform: scale(1) } }
         @keyframes gsoPop { 0% { transform: scale(.4) rotate(-6deg); opacity: 0 } 60% { transform: scale(1.12) rotate(1deg) } 100% { transform: scale(1) rotate(0); opacity: 1 } }
-        @keyframes gsoWordIn { 0% { transform: translateY(40px) skewX(-10deg); opacity: 0 } 45% { transform: translateY(0) skewX(0); opacity: 1 } 82% { opacity: 1 } 100% { opacity: 0; transform: translateY(-24px) }  }
+        @keyframes gsoWordIn { 0% { transform: translateY(44px) skewX(-10deg); opacity: 0 } 55% { transform: translateY(-4px) skewX(0) } 100% { transform: translateY(0); opacity: 1 } }
         @keyframes gsoCardIn { 0% { transform: translateX(120px) rotate(6deg); opacity: 0 } 70% { transform: translateX(-8px) rotate(-1deg) } 100% { transform: translateX(0) rotate(0); opacity: 1 } }
         @keyframes gsoSoloIn { 0% { transform: scale(.7) translateY(30px); opacity: 0 } 60% { transform: scale(1.04) } 100% { transform: scale(1) translateY(0); opacity: 1 } }
         @keyframes gsoNameIn { 0% { transform: translateY(24px); opacity: 0; letter-spacing: .3em } 100% { transform: translateY(0); opacity: 1; letter-spacing: normal } }
@@ -183,7 +190,7 @@ export function GameShowOpening({
         .gso-slam { animation: gsoSlam .8s cubic-bezier(.2,1.3,.3,1) both }
         .gso-pop { animation: gsoPop .6s cubic-bezier(.2,1.5,.3,1) both }
         .gso-glow { animation: gsoGlow 2.4s ease-in-out infinite }
-        .gso-word { animation: gsoWordIn 760ms cubic-bezier(.2,1,.3,1) both }
+        .gso-word { animation: gsoWordIn 700ms cubic-bezier(.2,1,.3,1) both }
         .gso-card { animation: gsoCardIn .62s cubic-bezier(.2,1.2,.3,1) both }
         .gso-solo { animation: gsoSoloIn .55s cubic-bezier(.2,1.4,.3,1) both }
         .gso-name { animation: gsoNameIn .5s cubic-bezier(.2,1,.3,1) both }
@@ -296,7 +303,7 @@ export function GameShowOpening({
           </div>
         ) : null}
 
-        {phase === "begin" || phase === "exit" ? (
+        {phase === "begin" ? (
           <div key="begin" className="relative">
             {phase === "begin"
               ? confetti.map((c, i) => (

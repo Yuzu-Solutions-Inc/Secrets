@@ -94,6 +94,9 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
   const [showOpening, setShowOpening] = useState(false);
   const prevStatusRef = useRef<string | null>(null);
   const autoOpeningDoneRef = useRef(false);
+  // Stable so the opening's internal sequencer isn't torn down when this
+  // component re-renders (it ticks a clock every second).
+  const closeOpening = useCallback(() => setShowOpening(false), []);
 
   const openingPlayers = useMemo<OpeningPlayer[]>(
     () =>
@@ -446,7 +449,7 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
           gameTitle={String(game.title)}
           players={openingPlayers}
           soundOn={soundOn}
-          onDone={() => setShowOpening(false)}
+          onDone={closeOpening}
         />
       ) : null}
 
