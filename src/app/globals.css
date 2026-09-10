@@ -53,22 +53,29 @@ button, a { -webkit-tap-highlight-color: transparent; }
   backdrop-filter: blur(18px);
 }
 
-.pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: .45rem;
-  min-height: 2.75rem;
-  padding: .65rem 1rem;
-  border-radius: 999px;
-  border: 0;
-  font-weight: 800;
-  text-decoration: none;
-  cursor: pointer;
-}
+/* Component classes live in @layer components so Tailwind utilities (which sit
+   in the later `utilities` layer) can override them — e.g. `hidden`,
+   `sm:inline-flex`, `w-full`. Unlayered rules would beat every utility and
+   silently break responsive show/hide on `.pill`. */
+@layer components {
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .45rem;
+    min-height: 2.75rem;
+    padding: .65rem 1rem;
+    border-radius: 999px;
+    border: 0;
+    font-weight: 800;
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+  }
 
-.pill-primary { color: white; background: linear-gradient(135deg, var(--pink), #a935d0); }
-.pill-secondary { color: var(--ink); background: white; border: 1px solid var(--border); }
+  .pill-primary { color: white; background: linear-gradient(135deg, var(--pink), #a935d0); }
+  .pill-secondary { color: var(--ink); background: white; border: 1px solid var(--border); }
+}
 .pill:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
   outline: 4px solid rgba(235, 47, 150, .25);
   outline-offset: 2px;
