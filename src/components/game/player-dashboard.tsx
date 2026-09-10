@@ -255,7 +255,12 @@ export function PlayerDashboard(props: Props) {
     setRevealArmed(false);
   }
 
-  const mission = props.missions[0]?.missions as Record<string, unknown> | undefined;
+  // Every mission the host has started for this player — a player can hold
+  // several at once, so all of them render (drafts stay hidden).
+  const missionRows = props.missions.filter((row) => {
+    const m = row.missions as Record<string, unknown> | undefined;
+    return m != null && m.status !== "draft";
+  });
 
   // A mission the host has started that this player has not opened yet. Drives
   // the "new mission" indicator; acknowledging it also writes seen_at so the
@@ -290,7 +295,7 @@ export function PlayerDashboard(props: Props) {
     hasSecret ||
     showBallot ||
     props.activeBuzzes.length > 0 ||
-    Boolean(mission) ||
+    missionRows.length > 0 ||
     isTeamRound ||
     props.hints.length > 0 ||
     props.hintOffers.length > 0;
@@ -394,7 +399,7 @@ export function PlayerDashboard(props: Props) {
                 hasSecret={hasSecret}
                 canSetSecret={canSetSecret}
                 showBallot={showBallot}
-                mission={mission}
+                missionRows={missionRows}
                 team={team}
                 isTeamRound={isTeamRound}
                 targets={targets}
@@ -755,7 +760,7 @@ type MyGameProps = Props & {
   hasSecret: boolean;
   canSetSecret: boolean;
   showBallot: boolean;
-  mission: Record<string, unknown> | undefined;
+  missionRows: Array<Record<string, unknown>>;
   team: Record<string, unknown> | undefined;
   isTeamRound: boolean;
   targets: Player[];
@@ -774,7 +779,7 @@ function MyGame(props: MyGameProps) {
     hasSecret,
     canSetSecret,
     showBallot,
-    mission,
+    missionRows,
     team,
     isTeamRound,
     targets,
@@ -934,31 +939,45 @@ function MyGame(props: MyGameProps) {
         );
       })}
 
-      {/* Mission */}
-      {mission ? (
-        <div className="rounded-2xl border border-pink-100 bg-white p-4">
-          <div className="flex items-center gap-2 font-black"><Zap className="text-pink-600" /> {t("mission")}</div>
-          <h3 className="display mt-3 text-xl font-black">{String(mission.title)}</h3>
-          <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{String(mission.instructions)}</p>
-          <p className="mt-3 text-sm font-black">
-            <span className="text-emerald-600">
-              {t("rewardIfApproved", { amount: formatMoney(Number(mission.reward), props.game.currency_symbol) })}
-            </span>
-            {Number(mission.penalty) > 0 ? (
-              <span className="mt-1 block text-red-600">
-                {t("penaltyIfFailed", { amount: formatMoney(Number(mission.penalty), props.game.currency_symbol) })}
+      {/* Missions — a player can hold more than one at a time */}
+      {missionRows.map((row) => {
+        const m = row.missions as Record<string, unknown>;
+        const status = String(m.status);
+        const submitted = Boolean(row.submitted_at) || status === "submitted";
+        const resolved = status === "approved" || status === "failed";
+        return (
+          <div key={String(m.id)} className="rounded-2xl border border-pink-100 bg-white p-4">
+            <div className="flex items-center gap-2 font-black"><Zap className="text-pink-600" /> {t("mission")}</div>
+            <h3 className="display mt-3 text-xl font-black">{String(m.title)}</h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{String(m.instructions)}</p>
+            <p className="mt-3 text-sm font-black">
+              <span className="text-emerald-600">
+                {t("rewardIfApproved", { amount: formatMoney(Number(m.reward), props.game.currency_symbol) })}
               </span>
-            ) : null}
-          </p>
-          <form action={submitMission} className="mt-3">
-            <input type="hidden" name="locale" value={props.locale} />
-            <input type="hidden" name="gameId" value={props.game.id} />
-            <input type="hidden" name="missionId" value={String(mission.id)} />
-            <input type="hidden" name="playerId" value={props.playerId} />
-            <button className="pill pill-primary w-full">{t("markComplete")}</button>
-          </form>
-        </div>
-      ) : null}
+              {Number(m.penalty) > 0 ? (
+                <span className="mt-1 block text-red-600">
+                  {t("penaltyIfFailed", { amount: formatMoney(Number(m.penalty), props.game.currency_symbol) })}
+                </span>
+              ) : null}
+            </p>
+            {resolved ? (
+              <p className={`mt-3 rounded-xl px-3 py-2 text-sm font-black ${status === "approved" ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-700"}`}>
+                {status === "approved" ? t("missionApproved") : t("missionFailed")}
+              </p>
+            ) : submitted ? (
+              <p className="mt-3 rounded-xl bg-amber-100 px-3 py-2 text-sm font-black text-amber-900">{t("missionAwaitingReview")}</p>
+            ) : (
+              <form action={submitMission} className="mt-3">
+                <input type="hidden" name="locale" value={props.locale} />
+                <input type="hidden" name="gameId" value={props.game.id} />
+                <input type="hidden" name="missionId" value={String(m.id)} />
+                <input type="hidden" name="playerId" value={props.playerId} />
+                <button className="pill pill-primary w-full">{t("markComplete")}</button>
+              </form>
+            )}
+          </div>
+        );
+      })}
 
       {/* Team */}
       {isTeamRound ? (

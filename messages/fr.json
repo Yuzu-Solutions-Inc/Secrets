@@ -152,6 +152,9 @@
   "play": {
     "wallet": "Ma cagnotte",
     "mission": "Mission en cours",
+    "missionAwaitingReview": "Envoyé à l'animateur — en attente de validation",
+    "missionApproved": "Validée — récompense versée",
+    "missionFailed": "Échouée — pénalité appliquée",
     "newMission": "Nouvelle mission de l’hôte — touchez pour voir",
     "hints": "Mes indices",
     "notes": "Carnet de théories",

@@ -152,6 +152,9 @@
   "play": {
     "wallet": "My wallet",
     "mission": "Current mission",
+    "missionAwaitingReview": "Sent to the host — waiting for review",
+    "missionApproved": "Approved — reward paid",
+    "missionFailed": "Marked failed — penalty charged",
     "newMission": "New mission from the host — tap to view",
     "hints": "My hints",
     "notes": "Theory notebook",
