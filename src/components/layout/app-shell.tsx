@@ -1,14 +1,27 @@
-import { Eye, Gamepad2, LogOut, Plus, Settings2 } from "lucide-react";
+import { Eye, Gamepad2, UserRound } from "lucide-react";
 
-import { signOut } from "@/app/actions/auth";
+import { getUser } from "@/lib/auth/session";
+import { createClient } from "@/lib/supabase/server";
 
-export function AppShell({
+export async function AppShell({
   locale,
   children,
 }: {
   locale: string;
   children: React.ReactNode;
 }) {
+  const user = await getUser();
+  let profile: { display_name: string | null; avatar_path: string | null; updated_at: string | null } | null = null;
+  if (user) {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("profiles")
+      .select("display_name, avatar_path, updated_at")
+      .eq("id", user.id)
+      .single();
+    profile = data;
+  }
+
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-30 border-b border-pink-100 bg-[color:var(--cream)]/90 backdrop-blur-xl">
@@ -19,19 +32,26 @@ export function AppShell({
             </span>
             Secrets
           </a>
-          <div className="flex items-center gap-1">
-            <a className="grid size-11 place-items-center rounded-full hover:bg-pink-100" href={`/${locale}/games/new`} aria-label="New game">
-              <Plus />
+          <div className="flex items-center gap-2">
+            <a className="pill bg-white text-sm" href={`/${locale}/games`}>
+              <Gamepad2 size={18} /> My games
             </a>
-            <a className="grid size-11 place-items-center rounded-full hover:bg-pink-100" href={`/${locale}/profile`} aria-label="Profile">
-              <Settings2 />
+            <a
+              className="grid size-11 place-items-center overflow-hidden rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200"
+              href={`/${locale}/profile`}
+              aria-label="Profile"
+            >
+              {profile?.avatar_path && user ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`/api/assets/avatar/${user.id}?v=${encodeURIComponent(String(profile.updated_at ?? ""))}`}
+                  alt={profile.display_name ?? "Profile"}
+                  className="size-full object-cover"
+                />
+              ) : (
+                <UserRound size={20} />
+              )}
             </a>
-            <form action={signOut}>
-              <input type="hidden" name="locale" value={locale} />
-              <button className="grid size-11 place-items-center rounded-full hover:bg-pink-100" aria-label="Sign out">
-                <LogOut />
-              </button>
-            </form>
           </div>
         </div>
       </header>
@@ -41,8 +61,8 @@ export function AppShell({
           <a className="flex min-h-12 flex-col items-center justify-center text-xs font-bold text-pink-600" href={`/${locale}/games`}>
             <Gamepad2 size={21} /> Games
           </a>
-          <a className="flex min-h-12 flex-col items-center justify-center text-xs font-bold" href={`/${locale}/games/new`}>
-            <Plus size={21} /> New
+          <a className="flex min-h-12 flex-col items-center justify-center text-xs font-bold" href={`/${locale}/profile`}>
+            <UserRound size={21} /> Profile
           </a>
         </div>
       </nav>
