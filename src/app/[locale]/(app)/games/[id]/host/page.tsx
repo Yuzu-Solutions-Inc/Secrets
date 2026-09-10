@@ -41,7 +41,7 @@ export default async function HostPage({
     supabase.from("game_players").select("id,user_id,is_ready,play_status,profiles(display_name,email,avatar_path),wallets(balance)").eq("game_id", id),
     supabase.from("game_rounds").select("*").eq("game_id", id).order("position"),
     supabase.from("accusation_buzzes").select("*,accuser:game_players!accuser_player_id(profiles(display_name)),target:game_players!target_player_id(profiles(display_name))").eq("game_id", id).order("created_at", { ascending: false }),
-    supabase.from("missions").select("*,mission_assignments(id,player_id,submitted_at,game_players(profiles(display_name)))").eq("game_id", id).order("created_at", { ascending: false }),
+    supabase.from("missions").select("*,mission_assignments(id,player_id,submitted_at,evidence_path,game_players(profiles(display_name)))").eq("game_id", id).order("created_at", { ascending: false }),
     supabase.from("game_events").select("*").eq("game_id", id).order("created_at", { ascending: false }).limit(20),
     supabase.from("secrets").select("*,secret_holders(player_id,game_players(id,user_id,profiles(display_name))),hints(id,kind,text,asset_path,image_ref,position,default_price,released_at)").eq("game_id", id),
     supabase.from("house_secrets").select("*,house_secret_clues(*)").eq("game_id", id).maybeSingle(),

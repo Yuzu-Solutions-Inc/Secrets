@@ -1116,6 +1116,14 @@ export function HostControlRoom({
                 </label>
               </div>
 
+              <label className="flex items-start gap-2 text-xs font-bold">
+                <input className="mt-0.5 size-4 shrink-0 accent-pink-600" type="checkbox" name="requireProof" />
+                <span>
+                  {t("requireProofLabel")}
+                  <span className="mt-0.5 block font-normal text-[var(--muted)]">{t("requireProofHint")}</span>
+                </span>
+              </label>
+
               <button className="pill pill-primary w-fit"><Sparkles size={16} /> {t("saveDraftMission")}</button>
             </ActionForm>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -1150,6 +1158,9 @@ export function HostControlRoom({
                     ) : (
                       <span className="text-[var(--muted)]">{t("noPenalty")}</span>
                     )}
+                    {mission.require_proof ? (
+                      <span className="inline-flex items-center gap-1 text-violet-700"><Eye size={13} /> {t("proofRequiredTag")}</span>
+                    ) : null}
                   </div>
                   {isDraft ? (
                     <ActionForm action={startMission} success={t("toastMissionLive")} className="mt-4">
@@ -1173,6 +1184,16 @@ export function HostControlRoom({
                             ? status === "approved" ? t("resultApproved") : t("resultFailed")
                             : assignment.submitted_at ? t("submitted") : t("inProgress")}
                         </p>
+                        {assignment.evidence_path ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={`/api/assets/mission-proof/${String(assignment.id)}`}
+                            alt={t("proofPhoto")}
+                            className="mt-2 max-h-48 rounded-lg"
+                          />
+                        ) : mission.require_proof && assignment.submitted_at ? (
+                          <p className="mt-1 text-xs text-[var(--muted)]">{t("proofMissing")}</p>
+                        ) : null}
                         {assignment.submitted_at && !resolved ? (
                           <div className="mt-2 grid grid-cols-2 gap-2">
                             {(["approved", "failed"] as const).map((result) => (

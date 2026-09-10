@@ -948,6 +948,7 @@ function MyGame(props: MyGameProps) {
         const status = String(m.status);
         const submitted = Boolean(row.submitted_at) || status === "submitted";
         const resolved = status === "approved" || status === "failed";
+        const requireProof = Boolean(m.require_proof);
         return (
           <div key={String(m.id)} className="rounded-2xl border border-pink-100 bg-white p-4">
             <div className="flex items-center gap-2 font-black"><Zap className="text-pink-600" /> {t("mission")}</div>
@@ -970,11 +971,24 @@ function MyGame(props: MyGameProps) {
             ) : submitted ? (
               <p className="mt-3 rounded-xl bg-amber-100 px-3 py-2 text-sm font-black text-amber-900">{t("missionAwaitingReview")}</p>
             ) : (
-              <form action={submitMission} className="mt-3">
+              <form action={submitMission} className="mt-3 space-y-2">
                 <input type="hidden" name="locale" value={props.locale} />
                 <input type="hidden" name="gameId" value={props.game.id} />
                 <input type="hidden" name="missionId" value={String(m.id)} />
                 <input type="hidden" name="playerId" value={props.playerId} />
+                {requireProof ? (
+                  <>
+                    <p className="text-xs font-bold text-violet-700">{t("proofRequiredNote")}</p>
+                    <input
+                      className="field text-sm"
+                      type="file"
+                      name="proof"
+                      accept="image/png,image/jpeg,image/webp"
+                      capture="environment"
+                      required
+                    />
+                  </>
+                ) : null}
                 <button className="pill pill-primary w-full">{t("markComplete")}</button>
               </form>
             )}

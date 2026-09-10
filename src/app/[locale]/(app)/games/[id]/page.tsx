@@ -51,7 +51,7 @@ export default async function GamePage({
       supabase.from("wallets").select("id,balance").eq("player_id", currentPlayer.id).maybeSingle(),
       supabase
         .from("mission_assignments")
-        .select("mission_id,submitted_at,seen_at,player_id,team_id,missions!inner(id,game_id,title,instructions,reward,penalty,status,deadline,started_at)")
+        .select("mission_id,submitted_at,seen_at,player_id,team_id,missions!inner(id,game_id,title,instructions,reward,penalty,status,deadline,started_at,require_proof)")
         .eq("missions.game_id", id),
       supabase
         .from("hint_grants")

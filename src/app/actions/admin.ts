@@ -225,6 +225,8 @@ export async function createMission(formData: FormData) {
     // Start (start_mission sets deadline = now + timer_minutes). Missions still
     // close only when the host says so (item 9).
     timerMinutes: z.coerce.number().int().min(0).max(1440).optional().default(0),
+    // When set, the player must attach a proof photo to mark the mission done.
+    requireProof: z.enum(["on"]).optional(),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
   // Missions are always created as a hidden draft — including pre-assigned
@@ -238,6 +240,7 @@ export async function createMission(formData: FormData) {
     visibility: parsed.visibility,
     status: "draft",
     timer_minutes: parsed.timerMinutes,
+    require_proof: parsed.requireProof === "on",
   }).select("id").single();
   if (error) throw new Error(error.message);
 
