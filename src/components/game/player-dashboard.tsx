@@ -350,6 +350,37 @@ export function PlayerDashboard(props: Props) {
         </button>
       ) : null}
 
+      {/* Broadcast dilemmas — Accept or Refuse a one-sentence offer from the
+          host. Top-level (not inside the Vault) so a live dilemma is always
+          visible and answerable. */}
+      {(props.dilemmas ?? []).map((dilemma) => (
+        <div key={dilemma.id} className="mt-4 rounded-2xl border border-pink-200 bg-white p-4 shadow-lg shadow-pink-500/10">
+          <div className="flex items-center gap-2 font-black"><ShieldQuestion className="text-pink-600" /> {dilemma.prompt}</div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {(["accept", "refuse"] as const).map((choice) => {
+              const chosen = dilemma.myChoice === choice;
+              return (
+                <form key={choice} action={respondToDilemma}>
+                  <input type="hidden" name="locale" value={props.locale} />
+                  <input type="hidden" name="gameId" value={props.game.id} />
+                  <input type="hidden" name="eventId" value={dilemma.id} />
+                  <input type="hidden" name="playerId" value={props.playerId} />
+                  <input type="hidden" name="choice" value={choice} />
+                  <button className={`pill w-full ${chosen ? "pill-primary" : "pill-secondary"}`}>
+                    {choice === "accept" ? t("accept") : t("refuse")}
+                  </button>
+                </form>
+              );
+            })}
+          </div>
+          {dilemma.myChoice ? (
+            <p className="mt-2 text-xs font-bold text-[var(--muted)]">
+              {dilemma.myChoice === "accept" ? t("dilemmaAccepted") : t("dilemmaRefused")}
+            </p>
+          ) : null}
+        </div>
+      ))}
+
       {/* 2. Money */}
       <article className="mt-4 rounded-[var(--radius)] bg-gradient-to-br from-pink-500 to-fuchsia-700 p-5 text-white shadow-[var(--shadow)]">
         <p className="flex items-center gap-2 text-sm font-bold text-white/90">
@@ -859,34 +890,6 @@ function MyGame(props: MyGameProps) {
         </div>
       ) : null}
 
-      {/* Broadcast dilemmas — Accept or Refuse a one-sentence offer */}
-      {(props.dilemmas ?? []).map((dilemma) => (
-        <div key={dilemma.id} className="rounded-2xl border border-pink-200 bg-white p-4">
-          <div className="flex items-center gap-2 font-black"><ShieldQuestion className="text-pink-600" /> {dilemma.prompt}</div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {(["accept", "refuse"] as const).map((choice) => {
-              const chosen = dilemma.myChoice === choice;
-              return (
-                <form key={choice} action={respondToDilemma}>
-                  <input type="hidden" name="locale" value={props.locale} />
-                  <input type="hidden" name="gameId" value={props.game.id} />
-                  <input type="hidden" name="eventId" value={dilemma.id} />
-                  <input type="hidden" name="playerId" value={props.playerId} />
-                  <input type="hidden" name="choice" value={choice} />
-                  <button className={`pill w-full ${chosen ? "pill-primary" : "pill-secondary"}`}>
-                    {choice === "accept" ? t("accept") : t("refuse")}
-                  </button>
-                </form>
-              );
-            })}
-          </div>
-          {dilemma.myChoice ? (
-            <p className="mt-2 text-xs font-bold text-[var(--muted)]">
-              {dilemma.myChoice === "accept" ? t("dilemmaAccepted") : t("dilemmaRefused")}
-            </p>
-          ) : null}
-        </div>
-      ))}
 
       {/* Secret ballot */}
       {showBallot && props.round ? (
