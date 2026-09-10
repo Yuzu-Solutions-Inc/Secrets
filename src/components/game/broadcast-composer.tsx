@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { Megaphone } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { assignPower, publishDilemma, publishEvent } from "@/app/actions/admin";
 import { powerSeeds } from "@/lib/game/seeds";
-import { POWER_EFFECT_LABELS } from "@/lib/game/rules";
 import { ActionForm } from "./action-form";
 
 type Row = Record<string, unknown>;
@@ -18,27 +18,32 @@ type EffectDraft =
   | { type: "free_buzz"; recipients: "responder" | "all" }
   | { type: "power"; power: PowerKey; recipients: "responder" | "all" };
 
-function effectLabel(effect: EffectDraft): string {
+// i18n keys (namespace "broadcast") for each effect's chip label.
+function effectLabelKey(effect: EffectDraft): string {
   switch (effect.type) {
     case "cash":
-      return "Money";
+      return "effMoney";
     case "free_hint":
-      return "Free hint";
+      return "effFreeHint";
     case "free_buzz":
-      return "Free buzz";
+      return "effFreeBuzz";
     case "power":
-      return POWER_EFFECT_LABELS[effect.power];
+      return effect.power === "double-vote"
+        ? "eff2Votes"
+        : effect.power === "immunity"
+          ? "effImmunity"
+          : "effBuzzShield";
   }
 }
 
 // The buttons that add a fresh effect row, in the order the host reads them.
-const ADD_EFFECTS: { label: string; make: () => EffectDraft }[] = [
-  { label: "Money", make: () => ({ type: "cash", direction: "gain", amount: 500 }) },
-  { label: "Free buzz", make: () => ({ type: "free_buzz", recipients: "responder" }) },
-  { label: "Free hint", make: () => ({ type: "free_hint", recipients: "responder", aboutPlayerId: "" }) },
-  { label: "2 votes", make: () => ({ type: "power", power: "double-vote", recipients: "responder" }) },
-  { label: "Immunity", make: () => ({ type: "power", power: "immunity", recipients: "responder" }) },
-  { label: "Buzz shield", make: () => ({ type: "power", power: "buzz-shield", recipients: "responder" }) },
+const ADD_EFFECTS: { labelKey: string; make: () => EffectDraft }[] = [
+  { labelKey: "effMoney", make: () => ({ type: "cash", direction: "gain", amount: 500 }) },
+  { labelKey: "effFreeBuzz", make: () => ({ type: "free_buzz", recipients: "responder" }) },
+  { labelKey: "effFreeHint", make: () => ({ type: "free_hint", recipients: "responder", aboutPlayerId: "" }) },
+  { labelKey: "eff2Votes", make: () => ({ type: "power", power: "double-vote", recipients: "responder" }) },
+  { labelKey: "effImmunity", make: () => ({ type: "power", power: "immunity", recipients: "responder" }) },
+  { labelKey: "effBuzzShield", make: () => ({ type: "power", power: "buzz-shield", recipients: "responder" }) },
 ];
 
 // What actually gets sent — drop empty optional fields.
@@ -63,6 +68,8 @@ export function BroadcastComposer({
   teams: Row[];
   players: Row[];
 }) {
+  const t = useTranslations("broadcast");
+  const tc = useTranslations("common");
   const [broadcastType, setBroadcastType] = useState("announcement");
   const [dilemmaScope, setDilemmaScope] = useState<"all" | "team" | "player">("all");
   const [powerScope, setPowerScope] = useState<"player" | "team" | "all">("player");
@@ -89,14 +96,21 @@ export function BroadcastComposer({
   return (
     <div className="bubble-card p-5">
       <div className="flex flex-wrap gap-2">
-        {["announcement", "clue", "dilemma", "power"].map((ty) => (
+        {(
+          [
+            ["announcement", "tabAnnouncement"],
+            ["clue", "tabClue"],
+            ["dilemma", "tabDilemma"],
+            ["power", "tabPower"],
+          ] as const
+        ).map(([ty, key]) => (
           <button
             key={ty}
             type="button"
             onClick={() => setBroadcastType(ty)}
-            className={`pill capitalize ${broadcastType === ty ? "pill-primary" : "pill-secondary"}`}
+            className={`pill ${broadcastType === ty ? "pill-primary" : "pill-secondary"}`}
           >
-            {ty}
+            {t(key)}
           </button>
         ))}
       </div>
@@ -104,7 +118,7 @@ export function BroadcastComposer({
       {broadcastType === "announcement" || broadcastType === "clue" ? (
         <ActionForm
           action={publishEvent}
-          success={broadcastType === "clue" ? "Clue broadcast" : "Announcement broadcast"}
+          success={broadcastType === "clue" ? t("toastClue") : t("toastAnnouncement")}
           onDone={() => {
             const el = document.getElementById("broadcast-title") as HTMLInputElement | null;
             if (el) el.value = "";
@@ -115,58 +129,56 @@ export function BroadcastComposer({
           <input type="hidden" name="gameId" value={gameId} />
           <input type="hidden" name="kind" value={broadcastType} />
           <p className="text-sm text-[var(--muted)]">
-            {broadcastType === "clue"
-              ? "A clue — its own dashboard sound and animation. Always public, always for everyone."
-              : "One line for the whole room, full-screen on the dashboard with sound. Always public."}
+            {broadcastType === "clue" ? t("clueBlurb") : t("announcementBlurb")}
           </p>
-          <input id="broadcast-title" className="field" name="title" placeholder={broadcastType === "clue" ? "The clue…" : "The announcement…"} required />
+          <input id="broadcast-title" className="field" name="title" placeholder={broadcastType === "clue" ? t("cluePlaceholder") : t("announcementPlaceholder")} required />
           <button className="pill pill-primary w-fit">
-            <Megaphone size={16} /> Broadcast
+            <Megaphone size={16} /> {t("broadcastCta")}
           </button>
         </ActionForm>
       ) : null}
 
       {broadcastType === "dilemma" ? (
-        <ActionForm action={publishDilemma} success="Dilemma sent" className="mt-4 grid gap-3">
+        <ActionForm action={publishDilemma} success={t("toastDilemma")} className="mt-4 grid gap-3">
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="gameId" value={gameId} />
           <input type="hidden" name="effects" value={JSON.stringify(serializeEffects(effects))} />
 
           <label className="text-xs font-bold">
-            The dilemma — one sentence
+            {t("dilemmaOneSentence")}
             <input
               className="field mt-1"
               name="prompt"
               maxLength={240}
-              placeholder="Take $500 now, but everyone gets a free hint about you."
+              placeholder={t("dilemmaPlaceholder")}
               required
             />
           </label>
 
           <div className="grid gap-3 sm:grid-cols-[12rem_1fr] sm:items-start">
             <label className="text-xs font-bold">
-              Who gets it
+              {t("whoGetsIt")}
               <select
                 className="field mt-1"
                 name="scope"
                 value={dilemmaScope}
                 onChange={(e) => setDilemmaScope(e.target.value as typeof dilemmaScope)}
               >
-                <option value="all">Everyone</option>
-                <option value="team">A team</option>
-                <option value="player">One player</option>
+                <option value="all">{t("everyone")}</option>
+                <option value="team">{t("aTeam")}</option>
+                <option value="player">{t("onePlayer")}</option>
               </select>
             </label>
             {dilemmaScope === "team" ? (
               <label className="text-xs font-bold">
-                Team
+                {t("aTeam")}
                 <select className="field mt-1" name="teamId" defaultValue="" required>
                   <option value="" disabled>
-                    Choose a team…
+                    {t("chooseTeam")}
                   </option>
-                  {teamOptions.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
+                  {teamOptions.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
                     </option>
                   ))}
                 </select>
@@ -174,14 +186,14 @@ export function BroadcastComposer({
             ) : null}
             {dilemmaScope === "player" ? (
               <label className="text-xs font-bold">
-                Player
+                {t("onePlayer")}
                 <select className="field mt-1" name="playerId" defaultValue="" required>
                   <option value="" disabled>
-                    Choose a player…
+                    {t("choosePlayer")}
                   </option>
-                  {playerOptions.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
+                  {playerOptions.map((player) => (
+                    <option key={player.id} value={player.id}>
+                      {player.name}
                     </option>
                   ))}
                 </select>
@@ -191,18 +203,16 @@ export function BroadcastComposer({
 
           <fieldset className="rounded-xl border border-pink-100 bg-pink-50/40 p-3">
             <legend className="px-1 text-xs font-black uppercase tracking-widest text-pink-600">
-              On Accept — auto-applied
+              {t("onAccept")}
             </legend>
             {!effects.length ? (
-              <p className="text-xs text-[var(--muted)]">
-                Nothing yet. Add an effect below. Refuse never does anything.
-              </p>
+              <p className="text-xs text-[var(--muted)]">{t("nothingYet")}</p>
             ) : null}
             <div className="mt-2 space-y-2">
               {effects.map((effect, index) => (
                 <div key={index} className="flex flex-wrap items-center gap-2 rounded-lg bg-white p-2 text-xs">
                   <span className="rounded-full bg-pink-100 px-2 py-1 font-black text-pink-700">
-                    {effectLabel(effect)}
+                    {t(effectLabelKey(effect))}
                   </span>
 
                   {effect.type === "cash" ? (
@@ -212,8 +222,8 @@ export function BroadcastComposer({
                         value={effect.direction}
                         onChange={(e) => updateEffect(index, { direction: e.target.value as "gain" | "loss" })}
                       >
-                        <option value="gain">Give to accepter</option>
-                        <option value="loss">Take from accepter</option>
+                        <option value="gain">{t("giveToAccepter")}</option>
+                        <option value="loss">{t("takeFromAccepter")}</option>
                       </select>
                       <input
                         className="field h-8 w-24"
@@ -231,8 +241,8 @@ export function BroadcastComposer({
                       value={effect.recipients}
                       onChange={(e) => updateEffect(index, { recipients: e.target.value as "responder" | "all" })}
                     >
-                      <option value="responder">for the accepter</option>
-                      <option value="all">for everyone</option>
+                      <option value="responder">{t("forAccepter")}</option>
+                      <option value="all">{t("forEveryone")}</option>
                     </select>
                   ) : null}
 
@@ -242,10 +252,10 @@ export function BroadcastComposer({
                       value={effect.aboutPlayerId}
                       onChange={(e) => updateEffect(index, { aboutPlayerId: e.target.value })}
                     >
-                      <option value="">about anyone</option>
-                      {playerOptions.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          about {p.name}
+                      <option value="">{t("aboutAnyone")}</option>
+                      {playerOptions.map((player) => (
+                        <option key={player.id} value={player.id}>
+                          {t("about", { name: player.name })}
                         </option>
                       ))}
                     </select>
@@ -256,61 +266,61 @@ export function BroadcastComposer({
                     onClick={() => removeEffect(index)}
                     className="ml-auto rounded-full bg-pink-50 px-2 py-1 font-bold text-pink-600 hover:bg-pink-100"
                   >
-                    Remove
+                    {tc("remove")}
                   </button>
                 </div>
               ))}
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
-              {ADD_EFFECTS.map(({ label, make }) => (
+              {ADD_EFFECTS.map(({ labelKey, make }) => (
                 <button
-                  key={label}
+                  key={labelKey}
                   type="button"
                   onClick={() => setEffects((prev) => [...prev, make()])}
                   className="pill pill-secondary h-8 text-xs"
                 >
-                  + {label}
+                  + {t(labelKey)}
                 </button>
               ))}
             </div>
           </fieldset>
 
           <label className="flex items-center gap-2 text-sm font-bold">
-            <input type="checkbox" name="isPublic" /> Show on the dashboard
+            <input type="checkbox" name="isPublic" /> {t("showOnDashboard")}
           </label>
-          <button className="pill pill-primary w-fit">Send dilemma</button>
+          <button className="pill pill-primary w-fit">{t("sendDilemma")}</button>
         </ActionForm>
       ) : null}
 
       {broadcastType === "power" ? (
-        <ActionForm action={assignPower} success="Power granted" className="mt-4 grid gap-3">
+        <ActionForm action={assignPower} success={t("toastPower")} className="mt-4 grid gap-3">
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="gameId" value={gameId} />
           <div className="grid gap-3 sm:grid-cols-[12rem_1fr] sm:items-start">
             <label className="text-xs font-bold">
-              Who gets it
+              {t("whoGetsIt")}
               <select
                 className="field mt-1"
                 name="scope"
                 value={powerScope}
                 onChange={(e) => setPowerScope(e.target.value as typeof powerScope)}
               >
-                <option value="player">One player</option>
-                <option value="team">A team</option>
-                <option value="all">Everyone</option>
+                <option value="player">{t("onePlayer")}</option>
+                <option value="team">{t("aTeam")}</option>
+                <option value="all">{t("everyone")}</option>
               </select>
             </label>
             {powerScope === "player" ? (
               <label className="text-xs font-bold">
-                Player
+                {t("onePlayer")}
                 <select className="field mt-1" name="playerId" defaultValue="" required>
                   <option value="" disabled>
-                    Choose a player…
+                    {t("choosePlayer")}
                   </option>
-                  {playerOptions.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
+                  {playerOptions.map((player) => (
+                    <option key={player.id} value={player.id}>
+                      {player.name}
                     </option>
                   ))}
                 </select>
@@ -318,14 +328,14 @@ export function BroadcastComposer({
             ) : null}
             {powerScope === "team" ? (
               <label className="text-xs font-bold">
-                Team
+                {t("aTeam")}
                 <select className="field mt-1" name="teamId" defaultValue="" required>
                   <option value="" disabled>
-                    Choose a team…
+                    {t("chooseTeam")}
                   </option>
-                  {teamOptions.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
+                  {teamOptions.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
                     </option>
                   ))}
                 </select>
@@ -334,7 +344,7 @@ export function BroadcastComposer({
           </div>
 
           <label className="text-xs font-bold">
-            Power
+            {t("power")}
             <select
               className="field mt-1"
               name="kind"
@@ -346,17 +356,17 @@ export function BroadcastComposer({
                   {power.title[locale === "fr" ? "fr" : "en"]}
                 </option>
               ))}
-              <option value="other">Other…</option>
+              <option value="other">{t("powerOther")}</option>
             </select>
           </label>
           {powerKind === "other" ? (
-            <input className="field" name="kindOther" placeholder="Custom power name" required />
+            <input className="field" name="kindOther" placeholder={t("customPowerPlaceholder")} required />
           ) : null}
 
           <label className="flex items-center gap-2 text-sm font-bold">
-            <input type="checkbox" name="isPublic" defaultChecked /> Announce on the dashboard
+            <input type="checkbox" name="isPublic" defaultChecked /> {t("announceOnDashboard")}
           </label>
-          <button className="pill pill-primary w-fit">Grant power</button>
+          <button className="pill pill-primary w-fit">{t("grantPower")}</button>
         </ActionForm>
       ) : null}
     </div>

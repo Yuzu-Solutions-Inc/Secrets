@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 /**
@@ -25,6 +26,7 @@ export function ActionForm({
   children: React.ReactNode;
 }) {
   const [pending, startTransition] = useTransition();
+  const t = useTranslations("common");
 
   return (
     <form
@@ -41,9 +43,7 @@ export function ActionForm({
             onDone?.();
           } catch (error) {
             toast.error(
-              error instanceof Error && error.message
-                ? error.message
-                : "Something went wrong — try again.",
+              error instanceof Error && error.message ? error.message : t("somethingWrong"),
             );
           }
         });

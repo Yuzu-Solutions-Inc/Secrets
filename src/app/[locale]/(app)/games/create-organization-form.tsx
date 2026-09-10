@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
+import { useTranslations } from "next-intl";
 
 import { createOrganization, type CreateOrganizationState } from "@/app/actions/game";
 
@@ -9,6 +10,7 @@ const initialState: CreateOrganizationState = { error: null };
 
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
+  const t = useTranslations("common");
   return (
     <button
       className="pill pill-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
@@ -16,13 +18,14 @@ function SubmitButton({ label }: { label: string }) {
       disabled={pending}
       aria-busy={pending}
     >
-      {pending ? "Creating…" : label}
+      {pending ? t("creating") : label}
     </button>
   );
 }
 
 export function CreateOrganizationForm({ locale, label }: { locale: string; label: string }) {
   const [state, formAction] = useActionState(createOrganization, initialState);
+  const t = useTranslations("games");
 
   return (
     <form action={formAction} className="mt-7 space-y-4">
@@ -30,7 +33,7 @@ export function CreateOrganizationForm({ locale, label }: { locale: string; labe
       <input
         className="field"
         name="name"
-        placeholder="Friday Night Crew"
+        placeholder={t("orgNamePlaceholder")}
         required
         minLength={2}
         maxLength={80}

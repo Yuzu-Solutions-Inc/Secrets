@@ -14,7 +14,7 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <html lang="en">
+    <html lang="fr">
       <body
         style={{
           margin: 0,
@@ -39,10 +39,12 @@ export default function GlobalError({
           }}
         >
           <h1 style={{ fontSize: "1.5rem", fontWeight: 800, margin: 0 }}>
-            This page couldn’t load
+            Cette page n’a pas pu se charger
           </h1>
           <p style={{ marginTop: "0.75rem", color: "#6b7280" }}>
-            Something went wrong on our side. Try again in a moment.
+            Un problème est survenu de notre côté. Réessayez dans un instant.
+            <br />
+            <span style={{ opacity: 0.7 }}>Something went wrong on our side. Try again in a moment.</span>
           </p>
           {error.digest ? (
             <p
@@ -70,7 +72,7 @@ export default function GlobalError({
               color: "#fff",
             }}
           >
-            Try again
+            Réessayer / Try again
           </button>
         </div>
       </body>
