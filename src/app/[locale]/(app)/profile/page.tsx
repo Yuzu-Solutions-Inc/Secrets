@@ -1,6 +1,7 @@
-import { Camera, UserRound } from "lucide-react";
+import { Camera, LogOut, UserRound } from "lucide-react";
 import { setRequestLocale } from "next-intl/server";
 
+import { signOut } from "@/app/actions/auth";
 import { updateProfile } from "@/app/actions/profile";
 import { getUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
@@ -50,6 +51,12 @@ export default async function ProfilePage({
         </label>
         <input type="hidden" name="locale" value={locale} />
         <button className="pill pill-primary w-full">Save profile</button>
+      </form>
+      <form action={signOut} className="mt-6 border-t border-pink-100 pt-6">
+        <input type="hidden" name="locale" value={locale} />
+        <button className="pill w-full bg-white text-pink-700">
+          <LogOut size={18} /> Sign out
+        </button>
       </form>
     </section>
   );
