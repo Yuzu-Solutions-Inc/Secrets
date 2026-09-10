@@ -29,24 +29,24 @@
     "moments": [
       {
         "title": "Quelqu’un buzze",
-        "line": "Un geste. Accusation lancée."
+        "line": "Devine le secret d’un joueur et rafle son argent."
       },
       {
         "title": "La pièce s’enflamme",
-        "line": "Le grand écran se retourne contre vous.",
-        "quote": "Je les ai vus près du coffre."
+        "line": "Le grand écran vire au rouge, affiche qui accuse qui, et se verrouille jusqu’à la décision de l’hôte.",
+        "quote": "Théo ment sur la clé du coffre depuis le début."
       },
       {
         "title": "Trouvé — ou pas",
-        "line": "Des confettis, ou une sirène."
+        "line": "Vise juste et son secret éclate devant toute la pièce. Rate, et tu viens d’offrir ton argent à l’ennemi."
       },
       {
         "title": "Partager ou voler",
-        "line": "Un choix muet décide du butin."
+        "line": "Partager ou voler? Découvre qui sont tes vrais amis."
       },
       {
         "title": "Les secrets éclatent",
-        "line": "Une révélation vide tous les indices dans le Coffre."
+        "line": "Dès qu’un secret tombe, chaque indice acheté sur ce joueur atterrit dans le Coffre commun."
       }
     ],
     "formats": {
@@ -188,6 +188,20 @@
     "verdictPartial": "Tout près",
     "verdictWrong": "Raté",
     "secretOut": "Secret dévoilé",
-    "hintsInVault": "Tous les indices sur {name} viennent d’arriver dans le Coffre"
+    "hintsInVault": "Tous les indices sur {name} viennent d’arriver dans le Coffre",
+    "openPresents": "Mesdames et messieurs…",
+    "openTagline": "Secrets. Indices. Missions. Trahison.",
+    "openTonight": "La partie de ce soir",
+    "openWords": [
+      "Chacun cache quelque chose.",
+      "Achetez les indices.",
+      "Démasquez le bluff.",
+      "Ne faites confiance à personne."
+    ],
+    "openWelcome": "Accueillez vos joueurs",
+    "openLetsBegin": "Que les secrets commencent",
+    "openSkip": "Passer",
+    "openReplay": "Revoir l’intro",
+    "openTapForSound": "Touchez pour le son"
   }
 }

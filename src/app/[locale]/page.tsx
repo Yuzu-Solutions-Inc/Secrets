@@ -47,6 +47,23 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 const DOTS = "radial-gradient(circle, var(--pink) 1px, transparent 1px)";
 
+/* Fictional demo game — never real player data. */
+const DEMO = {
+  game: "Villa Nocturne",
+  me: "Mara",
+  team: "Ravens",
+  accuser: "Mara",
+  target: "Théo",
+  board: [
+    { name: "Jules", amount: "12 100", out: false },
+    { name: "Sam", amount: "10 700", out: false },
+    { name: "Mara", amount: "9 400", out: false },
+    { name: "Priya", amount: "8 300", out: false },
+    { name: "Wei", amount: "7 250", out: false },
+    { name: "Théo", amount: "6 850", out: true },
+  ],
+};
+
 /* ---------- device frames ---------- */
 
 function PhoneShell({ children }: { children: ReactNode }) {
@@ -74,14 +91,14 @@ function TvShell({ t, children }: { t: T; children: ReactNode }) {
   return (
     <div className="mx-auto w-full max-w-[440px]">
       <div className="rounded-[1rem] bg-[var(--ink)] p-[6px] shadow-[0_40px_80px_-18px_rgba(50,20,47,.42)]">
-        <div className="relative aspect-[16/9] overflow-hidden rounded-[0.6rem] bg-gradient-to-br from-[var(--cream)] to-[var(--blush)]">
+        <div className="relative aspect-[16/10] overflow-hidden rounded-[0.6rem] bg-gradient-to-br from-[var(--cream)] to-[var(--blush)]">
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.06]"
             style={{ backgroundImage: DOTS, backgroundSize: "26px 26px" }}
           />
           <div className="relative flex h-full flex-col gap-2 p-3">
             <div className="flex items-center justify-between">
-              <p className="display text-sm font-black">Test Game</p>
+              <p className="display text-sm font-black">{DEMO.game}</p>
               <span className="flex items-center gap-1.5 rounded-full bg-white/85 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-pink-600 ring-1 ring-[var(--border)]">
                 <span className="size-1.5 rounded-full bg-pink-500" />
                 {t("display.live")}
@@ -103,12 +120,12 @@ function PhoneHeader() {
   return (
     <div className="flex items-center gap-2 rounded-2xl border border-[var(--border)] bg-white/85 p-2 backdrop-blur">
       <span className="grid size-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-pink-400 to-violet-500 text-[11px] font-black text-white">
-        L
+        {DEMO.me[0]}
       </span>
       <div className="min-w-0 leading-tight">
-        <p className="truncate text-xs font-black">Léa</p>
+        <p className="truncate text-xs font-black">{DEMO.me}</p>
         <p className="truncate text-[9px] font-bold text-[var(--muted)]">
-          Test Game
+          {DEMO.game}
         </p>
       </div>
     </div>
@@ -178,25 +195,21 @@ function screensFor(t: T): ReactNode[] {
             <Siren size={10} /> {t("display.accusation")}
           </p>
           <p className="display mt-1 text-xl font-black leading-none">
-            Léa <span className="text-rose-200">→</span> Max
+            {DEMO.accuser} <span className="text-rose-200">→</span> {DEMO.target}
           </p>
           <p className="mt-1 truncate text-[10px] font-semibold text-white/85">
             &ldquo;{t("landing.moments.1.quote")}&rdquo;
           </p>
         </div>
         <div className="grid flex-1 grid-cols-3 gap-1.5 opacity-75">
-          {[
-            ["Léa", "11 200"],
-            ["Max", "7 900"],
-            ["Sam", "9 050"],
-          ].map(([name, amount]) => (
+          {DEMO.board.slice(0, 3).map((p) => (
             <div
-              key={name}
+              key={p.name}
               className="flex flex-col justify-center rounded-lg border border-[var(--border)] bg-white/70 p-1.5"
             >
-              <p className="truncate text-[9px] font-black">{name}</p>
+              <p className="truncate text-[9px] font-black">{p.name}</p>
               <p className="display text-[11px] font-black tabular-nums text-pink-700">
-                {amount} ¤
+                {p.amount} ¤
               </p>
             </div>
           ))}
@@ -226,7 +239,7 @@ function screensFor(t: T): ReactNode[] {
           {t("display.verdictCorrect")}
         </p>
         <p className="relative mt-2 text-sm font-black">
-          Léa <span className="opacity-70">→</span> Max
+          {DEMO.accuser} <span className="opacity-70">→</span> {DEMO.target}
         </p>
       </div>
     </TvShell>,
@@ -239,7 +252,7 @@ function screensFor(t: T): ReactNode[] {
         <p className="flex items-center gap-1.5 text-[10px] font-black">
           <Users size={11} className="text-violet-600" /> {t("play.team")}
         </p>
-        <p className="display text-sm font-black">Team Rouge</p>
+        <p className="display text-sm font-black">{DEMO.team}</p>
       </div>
       <div className="grid flex-1 grid-cols-2 gap-2">
         <div className="flex flex-col items-center justify-center gap-2 rounded-2xl bg-white text-[var(--ink)] ring-1 ring-[var(--border)]">
@@ -259,22 +272,36 @@ function screensFor(t: T): ReactNode[] {
         <p className="text-[9px] font-black uppercase tracking-[.2em] text-pink-600">
           {t("display.balances")}
         </p>
-        <div className="mt-2 grid flex-1 grid-cols-2 gap-2">
-          <div className="flex flex-col justify-center gap-0.5 rounded-2xl border border-[var(--border)] bg-white p-3 shadow-sm">
-            <p className="truncate text-xs font-black">adrien</p>
-            <p className="display text-lg font-black tabular-nums text-pink-700">
-              12 562 ¤
-            </p>
-          </div>
-          <div className="flex flex-col justify-center gap-1 rounded-2xl border-2 border-violet-300 bg-[linear-gradient(150deg,#f5f0ff,#ffffff)] p-3 shadow-[0_10px_28px_rgba(124,58,237,.18)]">
-            <p className="truncate text-xs font-black">Dossierly</p>
-            <p className="display text-lg font-black tabular-nums text-violet-800">
-              8 437 ¤
-            </p>
-            <span className="inline-flex w-fit items-center gap-1 rounded-full bg-violet-600 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-white">
-              <Unlock size={9} /> {t("display.secretOut")}
-            </span>
-          </div>
+        <div className="mt-1.5 grid flex-1 grid-cols-3 gap-1.5">
+          {DEMO.board.map((p) => (
+            <div
+              key={p.name}
+              className={`flex flex-col justify-center gap-0.5 rounded-lg p-1.5 ${
+                p.out
+                  ? "border-2 border-violet-300 bg-[linear-gradient(150deg,#f5f0ff,#ffffff)] shadow-[0_8px_18px_rgba(124,58,237,.16)]"
+                  : "border border-[var(--border)] bg-white shadow-sm"
+              }`}
+            >
+              <p className="flex items-center gap-1 truncate text-[10px] font-black">
+                {p.out ? (
+                  <Unlock size={9} className="shrink-0 text-violet-600" />
+                ) : null}
+                {p.name}
+              </p>
+              <p
+                className={`display text-xs font-black tabular-nums ${
+                  p.out ? "text-violet-800" : "text-pink-700"
+                }`}
+              >
+                {p.amount} ¤
+              </p>
+              {p.out ? (
+                <span className="text-[7px] font-black uppercase tracking-widest text-violet-600">
+                  {t("display.secretOut")}
+                </span>
+              ) : null}
+            </div>
+          ))}
         </div>
       </div>
     </TvShell>,

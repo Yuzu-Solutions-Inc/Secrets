@@ -29,24 +29,24 @@
     "moments": [
       {
         "title": "Someone buzzes",
-        "line": "One tap. Full accusation."
+        "line": "Guess someone’s secret and take their money."
       },
       {
         "title": "The room erupts",
-        "line": "The big screen turns on you.",
-        "quote": "I saw them near the vault."
+        "line": "The big screen flares red, names who accused whom, and locks until the host rules.",
+        "quote": "Théo has been lying about that vault key all night."
       },
       {
         "title": "Cracked it — or not",
-        "line": "Confetti, or a siren."
+        "line": "Nail it and their secret is blown open for the room. Miss it and you just gave your money to the enemy."
       },
       {
         "title": "Share or steal",
-        "line": "One silent choice decides the payout."
+        "line": "Share or steal? Find out who’s really your friend."
       },
       {
         "title": "Secrets spill",
-        "line": "A reveal dumps every hint into the Vault."
+        "line": "The moment a secret drops, every clue anyone ever bought about that player lands in the shared Vault."
       }
     ],
     "formats": {
@@ -188,6 +188,20 @@
     "verdictPartial": "So close",
     "verdictWrong": "Missed",
     "secretOut": "Secret out",
-    "hintsInVault": "Every hint about {name} just dropped into the Vault"
+    "hintsInVault": "Every hint about {name} just dropped into the Vault",
+    "openPresents": "Ladies and gentlemen…",
+    "openTagline": "Secrets. Clues. Missions. Betrayal.",
+    "openTonight": "Tonight's game",
+    "openWords": [
+      "Everyone's hiding something.",
+      "Buy the clues.",
+      "Call the bluff.",
+      "Trust no one."
+    ],
+    "openWelcome": "Please welcome your players",
+    "openLetsBegin": "Let the secrets begin",
+    "openSkip": "Skip",
+    "openReplay": "Replay intro",
+    "openTapForSound": "Tap for sound"
   }
 }
