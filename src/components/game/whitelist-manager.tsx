@@ -2,6 +2,7 @@
 
 import { Check, Copy, UserPlus, X } from "lucide-react";
 import { useActionState, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { addToWhitelist, removeFromWhitelist, type WhitelistState } from "@/app/actions/invitations";
 
@@ -22,13 +23,13 @@ export function WhitelistManager({
 }) {
   const [state, action, pending] = useActionState(addToWhitelist, initial);
   const [copied, setCopied] = useState(false);
+  const t = useTranslations("whitelist");
+  const tc = useTranslations("common");
 
   return (
     <div className="bubble-card mb-4 p-5">
-      <p className="font-black">Invite players</p>
-      <p className="mt-1 text-sm text-[var(--muted)]">
-        Everyone joins with the same link. Only the emails you add below can actually get in.
-      </p>
+      <p className="font-black">{t("title")}</p>
+      <p className="mt-1 text-sm text-[var(--muted)]">{t("blurb")}</p>
 
       <div className="mt-3 flex items-center gap-2 rounded-2xl bg-pink-50 p-2 pl-4">
         <code className="min-w-0 flex-1 truncate text-xs">{inviteUrl}</code>
@@ -40,15 +41,15 @@ export function WhitelistManager({
           }}
           className="pill pill-secondary shrink-0"
         >
-          {copied ? <Check size={17} /> : <Copy size={17} />} {copied ? "Copied" : "Copy link"}
+          {copied ? <Check size={17} /> : <Copy size={17} />} {copied ? tc("copied") : tc("copy")}
         </button>
       </div>
 
       <form action={action} className="mt-3 flex flex-col gap-3 sm:flex-row">
         <input type="hidden" name="locale" value={locale} />
         <input type="hidden" name="gameId" value={gameId} />
-        <input className="field flex-1" name="email" type="email" placeholder="friend@example.com" required />
-        <button className="pill pill-primary shrink-0" disabled={pending}><UserPlus size={18} /> Add email</button>
+        <input className="field flex-1" name="email" type="email" placeholder={t("emailPlaceholder")} required />
+        <button className="pill pill-primary shrink-0" disabled={pending}><UserPlus size={18} /> {t("addEmail")}</button>
       </form>
       {state.error ? <p className="mt-2 text-sm font-bold text-red-600">{state.error}</p> : null}
 
@@ -61,7 +62,7 @@ export function WhitelistManager({
                 <input type="hidden" name="locale" value={locale} />
                 <input type="hidden" name="gameId" value={gameId} />
                 <input type="hidden" name="id" value={row.id} />
-                <button className="grid size-6 place-items-center rounded-full hover:bg-pink-200" aria-label={`Remove ${row.email}`}>
+                <button className="grid size-6 place-items-center rounded-full hover:bg-pink-200" aria-label={t("removeEmail", { email: row.email })}>
                   <X size={14} />
                 </button>
               </form>
@@ -69,7 +70,7 @@ export function WhitelistManager({
           ))}
         </ul>
       ) : (
-        <p className="mt-3 text-sm text-[var(--muted)]">No emails on the list yet.</p>
+        <p className="mt-3 text-sm text-[var(--muted)]">{t("empty")}</p>
       )}
     </div>
   );

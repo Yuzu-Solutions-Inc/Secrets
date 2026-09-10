@@ -1,4 +1,5 @@
 import { Eye, Gamepad2, UserRound } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 
 import { LocaleSwitcher } from "@/components/layout/locale-switcher";
 import { getUser } from "@/lib/auth/session";
@@ -12,6 +13,7 @@ export async function AppShell({
   children: React.ReactNode;
 }) {
   const user = await getUser();
+  const t = await getTranslations("nav");
   let profile: { display_name: string | null; avatar_path: string | null; updated_at: string | null } | null = null;
   if (user) {
     const supabase = await createClient();
@@ -36,12 +38,12 @@ export async function AppShell({
           <div className="flex items-center gap-2">
             <LocaleSwitcher />
             <a className="pill bg-white text-sm" href={`/${locale}/games`}>
-              <Gamepad2 size={18} /> My games
+              <Gamepad2 size={18} /> {t("myGames")}
             </a>
             <a
               className="grid size-11 place-items-center overflow-hidden rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200"
               href={`/${locale}/profile`}
-              aria-label="Profile"
+              aria-label={t("profile")}
             >
               {profile?.avatar_path && user ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -61,10 +63,10 @@ export async function AppShell({
       <nav className="safe-bottom sticky bottom-0 z-30 border-t border-pink-100 bg-white/94 backdrop-blur-xl sm:hidden">
         <div className="mx-auto grid w-full max-w-6xl grid-cols-2 px-5 pt-2">
           <a className="flex min-h-12 flex-col items-center justify-center text-xs font-bold text-pink-600" href={`/${locale}/games`}>
-            <Gamepad2 size={21} /> Games
+            <Gamepad2 size={21} /> {t("games")}
           </a>
           <a className="flex min-h-12 flex-col items-center justify-center text-xs font-bold" href={`/${locale}/profile`}>
-            <UserRound size={21} /> Profile
+            <UserRound size={21} /> {t("profile")}
           </a>
         </div>
       </nav>

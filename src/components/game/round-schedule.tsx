@@ -19,6 +19,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { Copy, GripVertical, Settings2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { addRound, deleteRound, duplicateRound, reorderRounds, updateRound } from "@/app/actions/admin";
 import { ActionForm } from "./action-form";
@@ -27,10 +28,10 @@ type Row = Record<string, unknown>;
 
 const ROUND_KINDS = ["team", "solo", "house_secret", "event", "nomination", "elimination", "finale"] as const;
 
-const WALLET_MODES: [string, string][] = [
-  ["personal", "Personal"],
-  ["temporary_team", "Temporary team pot"],
-  ["pooled_personal", "Pooled balances"],
+const WALLET_MODES: [string, "walletPersonal" | "walletTeamPot" | "walletPooled"][] = [
+  ["personal", "walletPersonal"],
+  ["temporary_team", "walletTeamPot"],
+  ["pooled_personal", "walletPooled"],
 ];
 
 export function RoundSchedule({
@@ -44,6 +45,7 @@ export function RoundSchedule({
   rounds: Row[];
   currentRoundId: string | null;
 }) {
+  const t = useTranslations("rounds");
   const hasFinale = rounds.some((r) => String(r.kind) === "finale");
 
   // Display order: by position, with any finale forced last.
@@ -103,48 +105,46 @@ export function RoundSchedule({
 
   return (
     <div className="space-y-4">
-      <ActionForm action={addRound} success="Round added" className="bubble-card grid gap-3 p-5">
+      <ActionForm action={addRound} success={t("toastAdded")} className="bubble-card grid gap-3 p-5">
         <input type="hidden" name="locale" value={locale} />
         <input type="hidden" name="gameId" value={gameId} />
         <div>
-          <h3 className="display text-lg font-black">Add a round</h3>
-          <p className="text-xs text-[var(--muted)]">
-            Rounds run in the order shown below — drag the handle to rearrange. Length is in minutes.
-          </p>
+          <h3 className="display text-lg font-black">{t("addTitle")}</h3>
+          <p className="text-xs text-[var(--muted)]">{t("addHint")}</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-[1fr_10rem_11rem_9rem_auto] sm:items-end">
           <label className="text-xs font-bold">
-            Title
-            <input className="field mt-1" name="title" placeholder="Round title" required />
+            {t("titleLabel")}
+            <input className="field mt-1" name="title" placeholder={t("titlePlaceholder")} required />
           </label>
           <label className="text-xs font-bold">
-            Type
+            {t("type")}
             <select className="field mt-1" name="kind" defaultValue="solo">
               {ROUND_KINDS.filter((kind) => kind !== "finale" || !hasFinale).map((kind) => (
                 <option key={kind} value={kind}>
-                  {kind.replaceAll("_", " ")}
+                  {t(`kind.${kind}`)}
                 </option>
               ))}
             </select>
           </label>
           <label className="text-xs font-bold">
-            Wallet mode
+            {t("walletMode")}
             <select className="field mt-1" name="walletMode" defaultValue="personal">
-              {WALLET_MODES.map(([value, label]) => (
+              {WALLET_MODES.map(([value, key]) => (
                 <option key={value} value={value}>
-                  {label}
+                  {t(key)}
                 </option>
               ))}
             </select>
           </label>
           <label className="text-xs font-bold">
-            Length (minutes)
+            {t("length")}
             <div className="mt-1 flex items-center gap-2">
               <input className="field" name="durationMinutes" type="number" min="1" defaultValue="45" required />
-              <span className="text-xs text-[var(--muted)]">min</span>
+              <span className="text-xs text-[var(--muted)]">{t("min")}</span>
             </div>
           </label>
-          <button className="pill pill-primary h-10">Add round</button>
+          <button className="pill pill-primary h-10">{t("addCta")}</button>
         </div>
       </ActionForm>
 
@@ -175,7 +175,7 @@ export function RoundSchedule({
               );
             })}
             {!order.length ? (
-              <p className="p-6 text-[var(--muted)]">Add rounds to your custom schedule.</p>
+              <p className="p-6 text-[var(--muted)]">{t("empty")}</p>
             ) : null}
           </div>
         </SortableContext>
@@ -205,6 +205,7 @@ function RoundRow({
   editing: boolean;
   onToggleEdit: () => void;
 }) {
+  const t = useTranslations("rounds");
   const rid = String(round.id);
   const status = String(round.status);
   const kind = String(round.kind);
@@ -222,6 +223,17 @@ function RoundRow({
         : isNext
           ? "next"
           : null;
+  const stageLabel = stage
+    ? t(
+        stage === "finished"
+          ? "stageFinished"
+          : stage === "cancelled"
+            ? "stageCancelled"
+            : stage === "current"
+              ? "stageCurrent"
+              : "stageNext",
+      )
+    : null;
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: rid,
@@ -241,7 +253,7 @@ function RoundRow({
           type="button"
           {...attributes}
           {...listeners}
-          aria-label="Drag to reorder"
+          aria-label={t("dragLabel")}
           disabled={!canDrag}
           className={`grid size-8 shrink-0 place-items-center rounded-full text-[var(--muted)] ${
             canDrag ? "cursor-grab bg-pink-50 hover:bg-pink-100 active:cursor-grabbing" : "cursor-default opacity-30"
@@ -255,7 +267,7 @@ function RoundRow({
         <div className="min-w-0 flex-1">
           <h2 className="truncate font-black">{String(round.title)}</h2>
           <p className="text-xs text-[var(--muted)]">
-            {kind.replaceAll("_", " ")} · {Number(cfg.durationMinutes ?? 0)} min
+            {t(`kind.${kind}`)} · {Number(cfg.durationMinutes ?? 0)} {t("min")}
           </p>
         </div>
         {stage ? (
@@ -270,19 +282,19 @@ function RoundRow({
                     : "bg-red-100 text-red-800"
             }`}
           >
-            {stage}
+            {stageLabel}
           </span>
         ) : null}
         {isFinale ? (
-          <span className="shrink-0 rounded-full bg-violet-100 px-2 py-1 text-xs font-black text-violet-800">final</span>
+          <span className="shrink-0 rounded-full bg-violet-100 px-2 py-1 text-xs font-black text-violet-800">{t("final")}</span>
         ) : null}
         <div className="flex shrink-0 gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
           {!isFinale ? (
-            <ActionForm action={duplicateRound} success="Round duplicated">
+            <ActionForm action={duplicateRound} success={t("toastDuplicated")}>
               <input type="hidden" name="locale" value={locale} />
               <input type="hidden" name="gameId" value={gameId} />
               <input type="hidden" name="roundId" value={rid} />
-              <button className="grid size-8 place-items-center rounded-full bg-pink-50 hover:bg-pink-100" aria-label="Duplicate round" title="Duplicate round">
+              <button className="grid size-8 place-items-center rounded-full bg-pink-50 hover:bg-pink-100" aria-label={t("duplicateLabel")} title={t("duplicateLabel")}>
                 <Copy size={14} />
               </button>
             </ActionForm>
@@ -291,7 +303,7 @@ function RoundRow({
             type="button"
             onClick={onToggleEdit}
             className="grid size-8 place-items-center rounded-full bg-pink-50 hover:bg-pink-100"
-            aria-label="Edit round settings"
+            aria-label={t("editLabel")}
             aria-expanded={editing}
           >
             <Settings2 size={14} />
@@ -300,17 +312,17 @@ function RoundRow({
       </div>
 
       {editing ? (
-        <ActionForm action={updateRound} success="Round saved" className="grid gap-3 border-t border-pink-100 bg-pink-50/30 p-4">
+        <ActionForm action={updateRound} success={t("toastSaved")} className="grid gap-3 border-t border-pink-100 bg-pink-50/30 p-4">
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="gameId" value={gameId} />
           <input type="hidden" name="roundId" value={rid} />
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-xs font-bold sm:col-span-2">
-              Title
+              {t("titleLabel")}
               <input className="field mt-1" name="title" defaultValue={String(round.title)} required />
             </label>
             <label className="text-xs font-bold">
-              Length (minutes)
+              {t("length")}
               <div className="mt-1 flex items-center gap-2">
                 <input
                   className="field"
@@ -320,15 +332,15 @@ function RoundRow({
                   defaultValue={Number(cfg.durationMinutes ?? 45)}
                   required
                 />
-                <span className="text-xs text-[var(--muted)]">min</span>
+                <span className="text-xs text-[var(--muted)]">{t("min")}</span>
               </div>
             </label>
             <label className="text-xs font-bold">
-              Wallet mode
+              {t("walletMode")}
               <select className="field mt-1" name="walletMode" defaultValue={String(cfg.walletMode ?? "personal")}>
-                {WALLET_MODES.map(([value, label]) => (
+                {WALLET_MODES.map(([value, key]) => (
                   <option key={value} value={value}>
-                    {label}
+                    {t(key)}
                   </option>
                 ))}
               </select>
@@ -336,10 +348,10 @@ function RoundRow({
           </div>
 
           <details className="rounded-xl border border-pink-100 bg-white/60 px-3 py-2 text-xs">
-            <summary className="cursor-pointer font-bold text-[var(--muted)]">Advanced economy &amp; buzz</summary>
+            <summary className="cursor-pointer font-bold text-[var(--muted)]">{t("advanced")}</summary>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <label className="font-bold">
-                Accusation buzz cost
+                {t("accusationCost")}
                 <input
                   className="field mt-1"
                   name="accusationStake"
@@ -350,7 +362,7 @@ function RoundRow({
                 />
               </label>
               <label className="font-bold">
-                Hint cost
+                {t("hintCost")}
                 <input
                   className="field mt-1"
                   name="hintPrice"
@@ -361,7 +373,7 @@ function RoundRow({
                 />
               </label>
               <label className="font-bold">
-                Correct-buzz transfer %
+                {t("transferPct")}
                 <input
                   className="field mt-1"
                   name="correctTransferPercent"
@@ -373,35 +385,35 @@ function RoundRow({
                 />
               </label>
               <label className="font-bold">
-                Hint visibility
+                {t("hintVisibility")}
                 <select className="field mt-1" name="hintVisibility" defaultValue={String(cfg.hintVisibility ?? "private")}>
-                  <option value="private">Private</option>
-                  <option value="team">Team</option>
-                  <option value="public">Public</option>
+                  <option value="private">{t("visPrivate")}</option>
+                  <option value="team">{t("visTeam")}</option>
+                  <option value="public">{t("visPublic")}</option>
                 </select>
               </label>
               <label className="font-bold">
-                Completes on
+                {t("completesOn")}
                 <select className="field mt-1" name="completion" defaultValue={String(cfg.completion ?? "manual")}>
-                  <option value="manual">Manual</option>
-                  <option value="timer">Timer</option>
-                  <option value="all_submitted">All submitted</option>
+                  <option value="manual">{t("compManual")}</option>
+                  <option value="timer">{t("compTimer")}</option>
+                  <option value="all_submitted">{t("compAll")}</option>
                 </select>
               </label>
               <label className="flex items-center gap-2 font-bold">
                 <input type="checkbox" name="accusationBuzzEnabled" defaultChecked={cfg.accusationBuzzEnabled !== false} />
-                Accusation buzz enabled
+                {t("accusationEnabled")}
               </label>
               <label className="flex items-center gap-2 font-bold">
                 <input type="checkbox" name="hintBuzzEnabled" defaultChecked={cfg.hintBuzzEnabled !== false} />
-                Hint buzz enabled
+                {t("hintEnabled")}
               </label>
             </div>
           </details>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button className="pill pill-primary h-9 text-xs">Save round</button>
-            {!isFuture ? <span className="text-xs text-[var(--muted)]">Only future rounds can be deleted.</span> : null}
+            <button className="pill pill-primary h-9 text-xs">{t("saveCta")}</button>
+            {!isFuture ? <span className="text-xs text-[var(--muted)]">{t("onlyFuture")}</span> : null}
           </div>
         </ActionForm>
       ) : null}
@@ -409,14 +421,14 @@ function RoundRow({
       {editing && isFuture ? (
         <ActionForm
           action={deleteRound}
-          success="Round deleted"
-          confirm="Delete this round?"
+          success={t("toastDeleted")}
+          confirm={t("deleteConfirm")}
           className="border-t border-pink-100 bg-pink-50/30 px-4 pb-4 pt-3"
         >
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="gameId" value={gameId} />
           <input type="hidden" name="roundId" value={rid} />
-          <button className="pill h-9 bg-red-500 text-xs text-white">Delete round</button>
+          <button className="pill h-9 bg-red-500 text-xs text-white">{t("deleteCta")}</button>
         </ActionForm>
       ) : null}
     </div>

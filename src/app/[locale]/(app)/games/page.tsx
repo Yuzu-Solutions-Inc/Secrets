@@ -13,6 +13,7 @@ export default async function GamesPage({
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("games");
+  const tStatus = await getTranslations("gameStatus");
   const memberships = await getMemberships();
 
   if (!memberships.length) {
@@ -20,10 +21,8 @@ export default async function GamesPage({
       <section className="mx-auto max-w-lg py-12">
         <div className="bubble-card p-7">
           <Sparkles className="text-pink-600" />
-          <h1 className="display mt-4 text-4xl font-black">Create your game group</h1>
-          <p className="mt-2 leading-7 text-[var(--muted)]">
-            Your group keeps games, friends and reusable round templates together.
-          </p>
+          <h1 className="display mt-4 text-4xl font-black">{t("orgTitle")}</h1>
+          <p className="mt-2 leading-7 text-[var(--muted)]">{t("orgBlurb")}</p>
           <CreateOrganizationForm locale={locale} label={t("create")} />
         </div>
       </section>
@@ -43,7 +42,7 @@ export default async function GamesPage({
     <section>
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p className="font-bold uppercase tracking-widest text-pink-600">Play together</p>
+          <p className="font-bold uppercase tracking-widest text-pink-600">{t("playTogether")}</p>
           <h1 className="display text-4xl font-black sm:text-5xl">{t("title")}</h1>
         </div>
         <a className="pill pill-primary hidden sm:inline-flex" href={`/${locale}/games/new`}>
@@ -64,7 +63,7 @@ export default async function GamesPage({
               <a href={`/${locale}/games/${game.id}`} className="absolute inset-0" aria-label={game.title} />
               <div className="flex items-center justify-between">
                 <span className="rounded-full bg-pink-100 px-3 py-1 text-xs font-black uppercase text-pink-700">
-                  {game.status.replaceAll("_", " ")}
+                  {tStatus.has(game.status) ? tStatus(game.status) : game.status.replaceAll("_", " ")}
                 </span>
                 <ArrowRight className="transition group-hover:translate-x-1" />
               </div>
@@ -78,7 +77,7 @@ export default async function GamesPage({
                   href={`/${locale}/games/${game.id}/host`}
                   className="pill relative z-10 mt-4 inline-flex items-center gap-2 bg-white text-sm"
                 >
-                  <Settings2 size={16} /> Host controls
+                  <Settings2 size={16} /> {t("hostControls")}
                 </a>
               ) : null}
             </div>

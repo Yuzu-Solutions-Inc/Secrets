@@ -88,7 +88,7 @@ export function AuthForm({
           <form action={requestPasswordReset} className="mt-3 flex gap-2">
             <input type="hidden" name="locale" value={locale} />
             <input className="field min-w-0" name="email" type="email" placeholder={t("email")} required />
-            <button className="pill pill-secondary shrink-0">Send</button>
+            <button className="pill pill-secondary shrink-0">{t("send")}</button>
           </form>
         </details>
       ) : null}
