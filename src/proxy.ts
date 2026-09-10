@@ -12,5 +12,7 @@ export default async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|auth|_next|_vercel|.*\\..*).*)"],
+  // `icon` and `apple-icon` are root-level metadata routes (no file extension),
+  // so they must be excluded here or next-intl redirects them to /<locale>/icon.
+  matcher: ["/((?!api|auth|_next|_vercel|icon|apple-icon|.*\\..*).*)"],
 };
