@@ -124,6 +124,10 @@ type Props = {
 export function PlayerDashboard(props: Props) {
   const t = useTranslations("play");
   const router = useRouter();
+  // Localised game-status label, falling back to the raw enum with underscores
+  // spaced out if a status has no translation yet.
+  const statusLabel = (status: string) =>
+    t.has(`status.${status}`) ? t(`status.${status}`) : status.replaceAll("_", " ");
   const [modal, setModal] = useState<"accuse" | "hint" | "secret" | null>(null);
   const [secretState, submitSecretAction] = useActionState(submitSecret, { success: false, error: null });
   const [buzzState, buzzFormAction] = useActionState(accusationBuzz, { success: false, error: null });
@@ -235,9 +239,9 @@ export function PlayerDashboard(props: Props) {
     setRevealing(true);
     try {
       const value = await revealMySecret(props.game.id);
-      setRevealedSecret(value ?? "No secret found.");
+      setRevealedSecret(value ?? t("noSecretFound"));
     } catch {
-      setRevealedSecret("Could not load your secret. Try again.");
+      setRevealedSecret(t("secretLoadError"));
     } finally {
       setRevealing(false);
       setRevealArmed(false);
@@ -314,9 +318,9 @@ export function PlayerDashboard(props: Props) {
       <article className="bubble-card flex items-center gap-4 p-5">
         <Avatar userId={props.currentUserId} name={me?.profiles?.display_name ?? null} size={56} />
         <div className="min-w-0">
-          <h1 className="display truncate text-2xl font-black leading-tight">{me?.profiles?.display_name ?? "You"}</h1>
+          <h1 className="display truncate text-2xl font-black leading-tight">{me?.profiles?.display_name ?? t("you")}</h1>
           <p className="mt-0.5 font-mono text-xs font-black uppercase tracking-widest text-pink-600">
-            #{props.game.public_code} · {props.game.status.replaceAll("_", " ")}
+            #{props.game.public_code} · {statusLabel(props.game.status)}
           </p>
         </div>
       </article>
@@ -374,10 +378,10 @@ export function PlayerDashboard(props: Props) {
           className="flex w-full items-center justify-between gap-2 font-black"
         >
           <span className="flex items-center gap-2 text-lg">
-            <Lock className="text-violet-600" /> Vault
+            <Lock className="text-violet-600" /> {t("vault")}
             {showMissionAlert ? <span className="h-2.5 w-2.5 rounded-full bg-pink-600" /> : null}
           </span>
-          <span className="text-xs font-bold text-[var(--muted)]">{vaultOpen ? "Close" : "Open"}</span>
+          <span className="text-xs font-bold text-[var(--muted)]">{vaultOpen ? t("close") : t("open")}</span>
         </button>
 
         {vaultOpen ? (
@@ -403,7 +407,7 @@ export function PlayerDashboard(props: Props) {
             ) : null}
 
             <div>
-              <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Everyone&apos;s secrets</p>
+              <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">{t("everyonesSecrets")}</p>
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {(vault?.players ?? []).map((player) => {
                   const count = player.hint_count || (hintsByPlayer.get(player.id)?.length ?? 0);
@@ -415,13 +419,13 @@ export function PlayerDashboard(props: Props) {
                       className="flex flex-col items-center gap-2 rounded-2xl border border-pink-100 bg-white p-3 text-center"
                     >
                       <Avatar userId={player.user_id} name={player.name} size={56} />
-                      <p className="w-full truncate text-sm font-black">{player.name ?? "Player"}</p>
+                      <p className="w-full truncate text-sm font-black">{player.name ?? t("player")}</p>
                       <div className="flex flex-wrap justify-center gap-1">
                         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-900">
-                          {count} hint{count === 1 ? "" : "s"}
+                          {t("hintCount", { count })}
                         </span>
                         {player.secret_revealed ? (
-                          <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black text-white">SECRET OUT</span>
+                          <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black uppercase text-white">{t("secretOut")}</span>
                         ) : null}
                       </div>
                     </button>
@@ -440,10 +444,10 @@ export function PlayerDashboard(props: Props) {
                     <p className="w-full truncate text-sm font-black">{t("houseSecret")}</p>
                     <div className="flex flex-wrap justify-center gap-1">
                       <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-black text-violet-900">
-                        {houseClues.length} clue{houseClues.length === 1 ? "" : "s"}
+                        {t("clueCount", { count: houseClues.length })}
                       </span>
                       {vault?.house?.revealed ? (
-                        <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black text-white">REVEALED</span>
+                        <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black uppercase text-white">{t("revealed")}</span>
                       ) : null}
                     </div>
                   </button>
@@ -456,17 +460,17 @@ export function PlayerDashboard(props: Props) {
 
       {/* Roster detail sheet — player */}
       {selectedPlayer ? (
-        <DetailSheet title={selectedPlayer.name ?? "Player"} onClose={() => setSelected(null)}>
+        <DetailSheet title={selectedPlayer.name ?? t("player")} onClose={() => setSelected(null)}>
           <div className="mt-4 space-y-5">
             {selectedPlayer.secret_revealed && selectedPlayer.secret_text ? (
               <div className="rounded-2xl bg-red-50 p-4">
-                <p className="text-xs font-black uppercase tracking-widest text-red-600">Secret revealed</p>
+                <p className="text-xs font-black uppercase tracking-widest text-red-600">{t("secretRevealed")}</p>
                 <p className="mt-2 text-lg font-bold break-words">{selectedPlayer.secret_text}</p>
               </div>
             ) : null}
 
             <div>
-              <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Hints you hold</p>
+              <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">{t("hintsYouHold")}</p>
               {selectedHints.length ? (
                 <ul className="mt-3 space-y-2">
                   {selectedHints.map((hint) => (
@@ -486,13 +490,13 @@ export function PlayerDashboard(props: Props) {
                   ))}
                 </ul>
               ) : (
-                <p className="mt-2 text-sm text-[var(--muted)]">No hints on this player yet.</p>
+                <p className="mt-2 text-sm text-[var(--muted)]">{t("noHintsOnPlayer")}</p>
               )}
             </div>
 
             {selectedAccusations.length ? (
               <div>
-                <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Your accusations</p>
+                <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">{t("yourAccusations")}</p>
                 <ul className="mt-3 space-y-2">
                   {selectedAccusations.map((a, index) => (
                     <li key={index} className="rounded-2xl bg-pink-50 p-3 text-sm">
@@ -505,7 +509,7 @@ export function PlayerDashboard(props: Props) {
             ) : null}
 
             <div>
-              <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Your comments</p>
+              <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">{t("yourComments")}</p>
               <NoteField
                 action={savePlayerNote}
                 hidden={{
@@ -515,7 +519,7 @@ export function PlayerDashboard(props: Props) {
                   targetPlayerId: selectedPlayer.id,
                 }}
                 initial={vault?.notes.find((note) => note.target_player_id === selectedPlayer.id)?.body ?? ""}
-                placeholder={`What is ${selectedPlayer.name ?? "this player"} hiding?`}
+                placeholder={t("whatIsHiding", { name: selectedPlayer.name ?? t("player") })}
               />
             </div>
           </div>
@@ -528,13 +532,13 @@ export function PlayerDashboard(props: Props) {
           <div className="mt-4 space-y-5">
             {vault?.house?.revealed && vault.house.answer ? (
               <div className="rounded-2xl bg-red-50 p-4">
-                <p className="text-xs font-black uppercase tracking-widest text-red-600">Answer revealed</p>
+                <p className="text-xs font-black uppercase tracking-widest text-red-600">{t("answerRevealed")}</p>
                 <p className="mt-2 text-lg font-bold break-words">{vault.house.answer}</p>
               </div>
             ) : null}
 
             <div>
-              <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Fragments</p>
+              <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">{t("fragments")}</p>
               {houseClues.length ? (
                 <ul className="mt-3 space-y-2">
                   {houseClues.map((clue) => (
@@ -554,7 +558,7 @@ export function PlayerDashboard(props: Props) {
                   ))}
                 </ul>
               ) : (
-                <p className="mt-2 text-sm text-[var(--muted)]">No fragments released yet.</p>
+                <p className="mt-2 text-sm text-[var(--muted)]">{t("noFragments")}</p>
               )}
             </div>
 
@@ -591,7 +595,7 @@ export function PlayerDashboard(props: Props) {
 
             {vault?.house ? (
               <div>
-                <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">Your comments</p>
+                <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">{t("yourComments")}</p>
                 <NoteField
                   action={saveHouseNote}
                   hidden={{
@@ -601,7 +605,7 @@ export function PlayerDashboard(props: Props) {
                     houseSecretId: vault.house.id,
                   }}
                   initial={vault.house.note ?? ""}
-                  placeholder="What is the House hiding?"
+                  placeholder={t("whatIsHouseHiding")}
                 />
               </div>
             ) : null}
@@ -615,7 +619,7 @@ export function PlayerDashboard(props: Props) {
           <div className="bubble-card safe-bottom w-full max-w-lg p-5">
             <div className="flex items-center justify-between">
               <h2 className="display text-3xl font-black">
-                {modal === "accuse" ? t("accuse") : modal === "hint" ? t("buyHint") : "My secret"}
+                {modal === "accuse" ? t("accuse") : modal === "hint" ? t("buyHint") : t("mySecret")}
               </h2>
               <button onClick={() => setModal(null)} className="grid size-11 place-items-center rounded-full bg-pink-50"><X /></button>
             </div>
@@ -624,8 +628,8 @@ export function PlayerDashboard(props: Props) {
                 <input type="hidden" name="locale" value={props.locale} />
                 <input type="hidden" name="gameId" value={props.game.id} />
                 <input type="hidden" name="playerId" value={props.playerId} />
-                <textarea name="value" className="field min-h-32" maxLength={500} required placeholder="I once…" />
-                <p className="text-xs text-[var(--muted)]">Only you and game admins can see this before it is revealed.</p>
+                <textarea name="value" className="field min-h-32" maxLength={500} required placeholder={t("secretPlaceholder")} />
+                <p className="text-xs text-[var(--muted)]">{t("secretVisibilityNote")}</p>
                 {secretState.error ? (
                   <p role="alert" className="text-sm font-semibold text-red-600">{secretState.error}</p>
                 ) : null}
@@ -636,16 +640,16 @@ export function PlayerDashboard(props: Props) {
                 <input type="hidden" name="locale" value={props.locale} />
                 <input type="hidden" name="gameId" value={props.game.id} />
                 <select className="field" name="targetPlayerId" required defaultValue="">
-                  <option value="" disabled>Select a player</option>
-                  {targets.map((player) => <option key={player.id} value={player.id}>{player.profiles?.display_name ?? "Player"}</option>)}
+                  <option value="" disabled>{t("selectPlayer")}</option>
+                  {targets.map((player) => <option key={player.id} value={player.id}>{player.profiles?.display_name ?? t("player")}</option>)}
                 </select>
-                {modal === "accuse" ? <textarea className="field min-h-28" name="theory" required placeholder="Their exact secret is…" /> : null}
+                {modal === "accuse" ? <textarea className="field min-h-28" name="theory" required placeholder={t("theoryPlaceholder")} /> : null}
                 {modalError ? (
                   <p role="alert" className="text-sm font-semibold text-red-600">{modalError}</p>
                 ) : null}
                 <button className={`pill w-full ${modal === "accuse" ? "bg-red-500 text-white" : "bg-amber-300 text-amber-950"}`}>
                   {modal === "accuse" ? <Megaphone size={18} /> : <Lightbulb size={18} />}
-                  Confirm buzz
+                  {t("confirmBuzz")}
                 </button>
               </form>
             )}
@@ -739,7 +743,8 @@ function NoteField({
 
 function SaveHint() {
   const { pending } = useFormStatus();
-  return <p className="mt-1 text-xs font-bold text-[var(--muted)]">{pending ? "Saving…" : "Saves automatically"}</p>;
+  const t = useTranslations("play");
+  return <p className="mt-1 text-xs font-bold text-[var(--muted)]">{pending ? t("saving") : t("savesAutomatically")}</p>;
 }
 
 type MyGameProps = Props & {
@@ -778,25 +783,25 @@ function MyGame(props: MyGameProps) {
 
   return (
     <div className="space-y-5">
-      <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">My game</p>
+      <p className="text-xs font-black uppercase tracking-widest text-[var(--muted)]">{t("myGame")}</p>
 
       {/* My secret */}
       <div className="rounded-2xl bg-violet-50 p-4">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-black uppercase tracking-widest text-violet-700">My secret</p>
+          <p className="text-xs font-black uppercase tracking-widest text-violet-700">{t("mySecret")}</p>
           {canSetSecret ? (
             <button type="button" onClick={props.onEditSecret} className="pill pill-secondary text-xs">
-              <LockKeyhole size={14} /> {hasSecret ? "Edit" : "Set"}
+              <LockKeyhole size={14} /> {hasSecret ? t("edit") : t("set")}
             </button>
           ) : null}
         </div>
         {!hasSecret ? (
-          <p className="mt-2 text-sm text-[var(--muted)]">You haven&apos;t set a secret yet.</p>
+          <p className="mt-2 text-sm text-[var(--muted)]">{t("noSecretYet")}</p>
         ) : revealedSecret !== null ? (
           <>
             <p className="mt-2 text-lg font-bold break-words">{revealedSecret}</p>
             <button type="button" onClick={props.onHideSecret} className="pill pill-secondary mt-3">
-              <EyeOff size={16} /> Hide
+              <EyeOff size={16} /> {t("hide")}
             </button>
           </>
         ) : (
@@ -810,28 +815,28 @@ function MyGame(props: MyGameProps) {
                 className={`pill ${revealArmed ? "bg-red-500 text-white" : "pill-secondary"} disabled:opacity-60`}
               >
                 <Eye size={16} />
-                {revealing ? "Opening…" : revealArmed ? "Tap again to reveal" : "Reveal my secret"}
+                {revealing ? t("opening") : revealArmed ? t("revealAgain") : t("revealMySecret")}
               </button>
               {revealArmed ? (
                 <button type="button" onClick={props.onDisarm} className="pill pill-secondary">
-                  Cancel
+                  {t("cancel")}
                 </button>
               ) : null}
             </div>
-            <p className="mt-2 text-xs text-[var(--muted)]">Kept hidden until you tap twice, so a glance at your screen won&apos;t give it away.</p>
+            <p className="mt-2 text-xs text-[var(--muted)]">{t("revealNote")}</p>
           </>
         )}
       </div>
 
       {activePerks.length ? (
         <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-pink-100 bg-white p-3">
-          <span className="text-xs font-black uppercase tracking-widest text-pink-600">Perks</span>
+          <span className="text-xs font-black uppercase tracking-widest text-pink-600">{t("perks")}</span>
           {activePerks.map((perk) => {
             const label =
-              perk.kind === "free_hint" ? "Free hint" : perk.kind === "free_buzz" ? "Free buzz" : "Buzz immunity";
+              perk.kind === "free_hint" ? t("perkFreeHint") : perk.kind === "free_buzz" ? t("perkFreeBuzz") : t("perkBuzzImmunity");
             const detail =
               perk.kind === "buzz_immunity" && perk.expiresAt
-                ? ` · until ${new Date(perk.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                ? ` · ${t("perkUntil", { time: new Date(perk.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}`
                 : perk.uses > 1
                   ? ` ×${perk.uses}`
                   : "";
@@ -859,14 +864,16 @@ function MyGame(props: MyGameProps) {
                   <input type="hidden" name="eventId" value={dilemma.id} />
                   <input type="hidden" name="playerId" value={props.playerId} />
                   <input type="hidden" name="choice" value={choice} />
-                  <button className={`pill w-full capitalize ${chosen ? "pill-primary" : "pill-secondary"}`}>{choice}</button>
+                  <button className={`pill w-full ${chosen ? "pill-primary" : "pill-secondary"}`}>
+                    {choice === "accept" ? t("accept") : t("refuse")}
+                  </button>
                 </form>
               );
             })}
           </div>
           {dilemma.myChoice ? (
             <p className="mt-2 text-xs font-bold text-[var(--muted)]">
-              {dilemma.myChoice === "accept" ? "You accepted — any effects have been applied." : "You refused."} Tap again to change it.
+              {dilemma.myChoice === "accept" ? t("dilemmaAccepted") : t("dilemmaRefused")}
             </p>
           ) : null}
         </div>
@@ -875,7 +882,7 @@ function MyGame(props: MyGameProps) {
       {/* Secret ballot */}
       {showBallot && props.round ? (
         <div className="rounded-2xl border border-pink-100 bg-white p-4">
-          <div className="flex items-center gap-2 font-black"><Users className="text-pink-600" /> Secret ballot</div>
+          <div className="flex items-center gap-2 font-black"><Users className="text-pink-600" /> {t("secretBallot")}</div>
           <form action={castVote} className="mt-3 space-y-2">
             <input type="hidden" name="locale" value={props.locale} />
             <input type="hidden" name="gameId" value={props.game.id} />
@@ -883,10 +890,10 @@ function MyGame(props: MyGameProps) {
             <input type="hidden" name="voterPlayerId" value={props.playerId} />
             <input type="hidden" name="kind" value={props.round.kind === "finale" ? "finale" : "nominate"} />
             <select className="field" name="targetPlayerId" required defaultValue="">
-              <option value="" disabled>Choose privately</option>
-              {targets.map((player) => <option key={player.id} value={player.id}>{player.profiles?.display_name ?? "Player"}</option>)}
+              <option value="" disabled>{t("choosePrivately")}</option>
+              {targets.map((player) => <option key={player.id} value={player.id}>{player.profiles?.display_name ?? t("player")}</option>)}
             </select>
-            <button className="pill pill-primary w-full">Lock my vote</button>
+            <button className="pill pill-primary w-full">{t("lockMyVote")}</button>
           </form>
         </div>
       ) : null}
@@ -897,8 +904,8 @@ function MyGame(props: MyGameProps) {
         const profile = target?.profiles as Record<string, unknown> | undefined;
         return (
           <div key={String(buzz.id)} className="rounded-2xl border border-red-200 bg-white p-4">
-            <p className="text-xs font-black uppercase tracking-widest text-red-600">Active accusation · {String(buzz.status)}</p>
-            <h3 className="display mt-2 text-xl font-black">{String(profile?.display_name ?? "Player")}: “{String(buzz.theory)}”</h3>
+            <p className="text-xs font-black uppercase tracking-widest text-red-600">{t("activeAccusation")} · {String(buzz.status)}</p>
+            <h3 className="display mt-2 text-xl font-black">{String(profile?.display_name ?? t("player"))}: “{String(buzz.theory)}”</h3>
             {buzz.status !== "confirmed" ? (
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {buzz.status === "confrontation" ? (
@@ -907,7 +914,7 @@ function MyGame(props: MyGameProps) {
                     <input type="hidden" name="gameId" value={props.game.id} />
                     <input type="hidden" name="buzzId" value={String(buzz.id)} />
                     <input type="hidden" name="status" value="confirmed" />
-                    <button className="pill bg-red-500 text-white w-full">Confirm</button>
+                    <button className="pill bg-red-500 text-white w-full">{t("confirm")}</button>
                   </form>
                 ) : <span />}
                 <form action={stageAccusationBuzz}>
@@ -915,7 +922,7 @@ function MyGame(props: MyGameProps) {
                   <input type="hidden" name="gameId" value={props.game.id} />
                   <input type="hidden" name="buzzId" value={String(buzz.id)} />
                   <input type="hidden" name="status" value="retracted" />
-                  <button className="pill pill-secondary w-full">Retract</button>
+                  <button className="pill pill-secondary w-full">{t("retract")}</button>
                 </form>
               </div>
             ) : null}
@@ -931,11 +938,11 @@ function MyGame(props: MyGameProps) {
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{String(mission.instructions)}</p>
           <p className="mt-3 text-sm font-black">
             <span className="text-emerald-600">
-              +{formatMoney(Number(mission.reward), props.game.currency_symbol)} if the host approves it
+              {t("rewardIfApproved", { amount: formatMoney(Number(mission.reward), props.game.currency_symbol) })}
             </span>
             {Number(mission.penalty) > 0 ? (
               <span className="mt-1 block text-red-600">
-                −{formatMoney(Number(mission.penalty), props.game.currency_symbol)} if it fails
+                {t("penaltyIfFailed", { amount: formatMoney(Number(mission.penalty), props.game.currency_symbol) })}
               </span>
             ) : null}
           </p>
@@ -944,7 +951,7 @@ function MyGame(props: MyGameProps) {
             <input type="hidden" name="gameId" value={props.game.id} />
             <input type="hidden" name="missionId" value={String(mission.id)} />
             <input type="hidden" name="playerId" value={props.playerId} />
-            <button className="pill pill-primary w-full">Mark complete</button>
+            <button className="pill pill-primary w-full">{t("markComplete")}</button>
           </form>
         </div>
       ) : null}
@@ -953,7 +960,7 @@ function MyGame(props: MyGameProps) {
       {isTeamRound ? (
         <div className="rounded-2xl border border-pink-100 bg-white p-4">
           <div className="flex items-center gap-2 font-black"><Users className="text-violet-600" /> {t("team")}</div>
-          <h3 className="display mt-3 text-xl font-black">{team ? String(team.name) : "Not assigned yet"}</h3>
+          <h3 className="display mt-3 text-xl font-black">{team ? String(team.name) : t("notAssignedYet")}</h3>
           {team && !props.teamMember?.dilemma_choice ? (
             <div className="mt-3 grid grid-cols-2 gap-2">
               {(["share", "steal"] as const).map((choice) => (
@@ -982,7 +989,7 @@ function MyGame(props: MyGameProps) {
               const hint = grant.hints as Record<string, unknown> | undefined;
               return (
                 <details key={String(grant.id)} className="rounded-2xl bg-amber-50 p-4">
-                  <summary className="cursor-pointer font-bold">{String(hint?.text ?? "Image hint")}</summary>
+                  <summary className="cursor-pointer font-bold">{String(hint?.text ?? t("imageHint"))}</summary>
                   {hint?.asset_path || hint?.kind === "image" ? (
                     <Image
                       className="mt-3 h-auto w-full rounded-xl"
@@ -999,22 +1006,22 @@ function MyGame(props: MyGameProps) {
                       <input type="hidden" name="gameId" value={props.game.id} />
                       <input type="hidden" name="hintId" value={String(hint?.id)} />
                       <select className="field" name="recipientPlayerId" required defaultValue="">
-                        <option value="" disabled>Share with…</option>
-                        {targets.map((player) => <option key={player.id} value={player.id}>{player.profiles?.display_name ?? "Player"}</option>)}
+                        <option value="" disabled>{t("shareWith")}</option>
+                        {targets.map((player) => <option key={player.id} value={player.id}>{player.profiles?.display_name ?? t("player")}</option>)}
                       </select>
-                      <button className="pill pill-secondary">Share free</button>
+                      <button className="pill pill-secondary">{t("shareFree")}</button>
                     </form>
                     <form action={createHintOffer} className="grid gap-2">
                       <input type="hidden" name="locale" value={props.locale} />
                       <input type="hidden" name="gameId" value={props.game.id} />
                       <input type="hidden" name="hintId" value={String(hint?.id)} />
                       <select className="field" name="buyerPlayerId" required defaultValue="">
-                        <option value="" disabled>Sell to…</option>
-                        {targets.map((player) => <option key={player.id} value={player.id}>{player.profiles?.display_name ?? "Player"}</option>)}
+                        <option value="" disabled>{t("sellTo")}</option>
+                        {targets.map((player) => <option key={player.id} value={player.id}>{player.profiles?.display_name ?? t("player")}</option>)}
                       </select>
                       <div className="flex gap-2">
-                        <input className="field min-w-0" name="price" type="number" min="1" placeholder="Price" required />
-                        <button className="pill pill-primary shrink-0">Offer</button>
+                        <input className="field min-w-0" name="price" type="number" min="1" placeholder={t("price")} required />
+                        <button className="pill pill-primary shrink-0">{t("offer")}</button>
                       </div>
                     </form>
                   </div>
@@ -1028,7 +1035,7 @@ function MyGame(props: MyGameProps) {
       {/* Hint offers to me */}
       {props.hintOffers.length ? (
         <div className="rounded-2xl border border-pink-100 bg-white p-4">
-          <div className="flex items-center gap-2 font-black"><Coins className="text-pink-600" /> Hint offers</div>
+          <div className="flex items-center gap-2 font-black"><Coins className="text-pink-600" /> {t("hintOffers")}</div>
           <div className="mt-3 space-y-2">
             {props.hintOffers.map((offer) => {
               const seller = offer.seller as Record<string, unknown> | undefined;
@@ -1036,9 +1043,15 @@ function MyGame(props: MyGameProps) {
               const hint = offer.hints as Record<string, unknown> | undefined;
               return (
                 <div key={String(offer.id)} className="rounded-2xl bg-pink-50 p-4">
-                  <p className="font-bold">{String(sellerProfile?.display_name ?? "A player")} offers “{String(hint?.text ?? "an image hint")}” for {formatMoney(Number(offer.price), props.game.currency_symbol)}</p>
+                  <p className="font-bold">
+                    {t("hintOfferLine", {
+                      seller: String(sellerProfile?.display_name ?? t("aPlayer")),
+                      hint: String(hint?.text ?? t("anImageHint")),
+                      price: formatMoney(Number(offer.price), props.game.currency_symbol),
+                    })}
+                  </p>
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    {[["true", "Accept"], ["false", "Decline"]].map(([accept, label]) => (
+                    {[["true", t("accept")], ["false", t("decline")]].map(([accept, label]) => (
                       <form action={resolveHintOffer} key={accept}>
                         <input type="hidden" name="locale" value={props.locale} />
                         <input type="hidden" name="gameId" value={props.game.id} />
@@ -1060,6 +1073,7 @@ function MyGame(props: MyGameProps) {
 
 function SaveSecretButton() {
   const { pending } = useFormStatus();
+  const t = useTranslations("play");
   return (
     <button
       className="pill pill-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
@@ -1067,7 +1081,7 @@ function SaveSecretButton() {
       disabled={pending}
       aria-busy={pending}
     >
-      <LockKeyhole size={18} /> {pending ? "Saving…" : "Save privately"}
+      <LockKeyhole size={18} /> {pending ? t("saving") : t("savePrivately")}
     </button>
   );
 }

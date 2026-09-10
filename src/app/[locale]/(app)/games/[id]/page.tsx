@@ -1,6 +1,6 @@
 import { Settings2 } from "lucide-react";
 import { notFound } from "next/navigation";
-import { setRequestLocale } from "next-intl/server";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { PlayerDashboard } from "@/components/game/player-dashboard";
 import { getUser } from "@/lib/auth/session";
@@ -13,6 +13,7 @@ export default async function GamePage({
 }) {
   const { locale, id } = await params;
   setRequestLocale(locale);
+  const t = await getTranslations("play");
   const user = await getUser();
   const supabase = await createClient();
   const { data: game } = await supabase
@@ -162,13 +163,13 @@ export default async function GamePage({
       {isAdmin ? (
         <div className="mx-auto mb-4 flex max-w-3xl items-center justify-between gap-4 rounded-2xl bg-pink-50 px-5 py-3">
           <p className="text-sm font-semibold text-pink-800">
-            You&apos;re hosting this game.
+            {t("hostingBanner")}
           </p>
           <a
             href={`/${locale}/games/${id}/host`}
             className="pill pill-primary inline-flex items-center gap-2 text-sm"
           >
-            <Settings2 size={16} /> Host controls
+            <Settings2 size={16} /> {t("hostControls")}
           </a>
         </div>
       ) : null}
