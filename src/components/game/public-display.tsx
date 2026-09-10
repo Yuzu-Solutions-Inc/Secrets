@@ -46,9 +46,12 @@ export type DashboardData = {
   verdict: Verdict | null;
 };
 
-// A broadcast event holds the screen full-size for a minute, then lives on in
-// the history column (item 18). Phones show it for 5s (player dashboard).
+// A broadcast event holds the screen full-size, then lives on in the history
+// column (item 18). Phones show it for 5s (player dashboard). Clues — the
+// house-clue "drop" the host releases — hold for 15s; other broadcasts a
+// minute.
 const TAKEOVER_MS = 60_000;
+const CLUE_TAKEOVER_MS = 15_000;
 
 const EVENT_META: Record<string, { icon: typeof Megaphone; tint: string; label: string }> = {
   announcement: { icon: Megaphone, tint: "from-pink-500 to-fuchsia-600", label: "Announcement" },
@@ -215,8 +218,11 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
       const ctx = ensureAudio();
       if (!ctx || ctx.state !== "running") return;
       if (kind === "clue") {
-        tone(0, 880, 0.18, "sine", 0.22);
-        tone(0.14, 1174.7, 0.4, "sine", 0.22);
+        // A brighter, look-up-at-the-screen alert for a released clue.
+        tone(0, 987.77, 0.12, "square", 0.24);
+        tone(0.13, 987.77, 0.12, "square", 0.24);
+        tone(0.3, 1318.5, 0.16, "square", 0.26);
+        tone(0.5, 1567.98, 0.5, "sine", 0.22);
       } else if (kind === "dilemma") {
         tone(0, 392, 0.22, "triangle", 0.24);
         tone(0.18, 523.25, 0.22, "triangle", 0.24);
@@ -320,9 +326,10 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
     const id = newest ? String(newest.id) : null;
     if (!id || id === eventSeenRef.current) return;
     eventSeenRef.current = id;
+    const kind = String(newest.kind ?? "announcement");
     setTakeover(newest);
-    if (soundOn) playEventChime(String(newest.kind ?? "announcement"));
-    const clear = window.setTimeout(() => setTakeover(null), TAKEOVER_MS);
+    if (soundOn) playEventChime(kind);
+    const clear = window.setTimeout(() => setTakeover(null), kind === "clue" ? CLUE_TAKEOVER_MS : TAKEOVER_MS);
     return () => window.clearTimeout(clear);
   }, [recentEvents, soundOn, playEventChime]);
 

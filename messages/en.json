@@ -342,6 +342,7 @@
     "clues": "Clues",
     "imageClue": "Image clue",
     "release": "Release",
+    "clueReleaseFlashHint": "Flashes the clue on the display for 15s with a sound",
     "noCluesYet": "No clues yet.",
     "addClue": "Add clue",
     "decoy": "Decoy",

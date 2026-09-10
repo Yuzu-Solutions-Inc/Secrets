@@ -819,7 +819,9 @@ export function HostControlRoom({
                                         <input type="hidden" name="locale" value={locale} />
                                         <input type="hidden" name="gameId" value={String(game.id)} />
                                         <input type="hidden" name="clueId" value={String(clue.id)} />
-                                        <button className="font-black text-emerald-700 hover:underline">{t("release")}</button>
+                                        <button className="pill pill-secondary h-8 gap-1 text-xs" title={t("clueReleaseFlashHint")}>
+                                          <Megaphone size={12} /> {t("release")}
+                                        </button>
                                       </ActionForm>
                                     ) : null}
                                     <ActionForm action={deleteHouseClue} success={tc("delete")} confirm={`${tc("delete")}?`}>

@@ -791,7 +791,8 @@ export async function deleteHouseClue(formData: FormData) {
   refresh(parsed.locale, parsed.gameId);
 }
 
-// Release one specific held clue.
+// Release one specific held clue. Releasing also drops a public "clue" event
+// so the TV flashes it for 15s with an attention chime (see public-display).
 export async function releaseHouseClue(formData: FormData) {
   const parsed = base.extend({
     clueId: z.string().uuid(),
@@ -799,12 +800,23 @@ export async function releaseHouseClue(formData: FormData) {
   const supabase = await createClient();
   const { data: allowed } = await supabase.rpc("is_game_admin", { p_game_id: parsed.gameId });
   if (!allowed) throw new Error("forbidden");
-  const { error } = await supabase
+  const { data: clue, error } = await supabase
     .from("house_secret_clues")
     .update({ released_at: new Date().toISOString() })
     .eq("id", parsed.clueId)
-    .is("released_at", null);
+    .is("released_at", null)
+    .select("text")
+    .maybeSingle();
   if (error) throw new Error(error.message);
+  if (clue) {
+    await supabase.from("game_events").insert({
+      game_id: parsed.gameId,
+      kind: "clue",
+      title: clue.text || (parsed.locale === "fr" ? "Nouvel indice" : "New clue"),
+      is_public: true,
+      published_at: new Date().toISOString(),
+    });
+  }
   refresh(parsed.locale, parsed.gameId);
 }
 

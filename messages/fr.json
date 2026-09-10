@@ -342,6 +342,7 @@
     "clues": "Indices",
     "imageClue": "Indice image",
     "release": "Publier",
+    "clueReleaseFlashHint": "Affiche l'indice 15s sur l'écran avec un son",
     "noCluesYet": "Aucun indice pour l’instant.",
     "addClue": "Ajouter un indice",
     "decoy": "Leurre",
