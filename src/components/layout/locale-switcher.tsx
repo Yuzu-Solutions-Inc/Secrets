@@ -19,8 +19,8 @@ export function LocaleSwitcher() {
     <label className="relative flex items-center">
       <span className="sr-only">Language</span>
       <Languages
-        size={16}
-        className="pointer-events-none absolute left-2.5 text-pink-600"
+        size={18}
+        className="pointer-events-none absolute left-3 text-pink-600"
         aria-hidden="true"
       />
       <select
@@ -33,7 +33,7 @@ export function LocaleSwitcher() {
             router.replace(pathname, { locale });
           });
         }}
-        className="min-h-9 appearance-none rounded-full border border-pink-100 bg-white py-1.5 pl-8 pr-7 text-xs font-black text-pink-700 disabled:opacity-60"
+        className="h-11 appearance-none rounded-full bg-white pl-10 pr-9 text-sm font-extrabold leading-none text-pink-700 disabled:opacity-60"
       >
         {routing.locales.map((locale) => (
           <option key={locale} value={locale}>
@@ -42,7 +42,7 @@ export function LocaleSwitcher() {
         ))}
       </select>
       <svg
-        className="pointer-events-none absolute right-2.5 h-3 w-3 text-pink-500"
+        className="pointer-events-none absolute right-3 h-3 w-3 text-pink-500"
         viewBox="0 0 12 12"
         fill="none"
         aria-hidden="true"
