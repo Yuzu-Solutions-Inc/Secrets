@@ -252,7 +252,22 @@
       "finale": "finale",
       "completed": "terminé",
       "archived": "archivé"
-    }
+    },
+    "hideHistory": "Masquer l’historique des transactions",
+    "showHistory": "Historique des transactions",
+    "noMovements": "Aucun mouvement pour l’instant.",
+    "ledgerDefenseHeld": "Défense tenue",
+    "ledgerAccusationWon": "Accusation réussie",
+    "ledgerAccusationLost": "Accusation ratée",
+    "ledgerHintSold": "Indice vendu",
+    "ledgerHintBought": "Indice acheté",
+    "ledgerMissionReward": "Récompense de mission",
+    "ledgerMissionPenalty": "Pénalité de mission",
+    "ledgerDilemma": "Dilemme",
+    "ledgerTeamPot": "Cagnotte d’équipe",
+    "ledgerHostAdjustment": "Ajustement de l’hôte",
+    "ledgerStartingCash": "Cagnotte de départ",
+    "ledgerCorrection": "Correction"
   },
   "host": {
     "control": "Régie",

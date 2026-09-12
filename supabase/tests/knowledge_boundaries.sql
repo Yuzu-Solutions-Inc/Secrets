@@ -95,8 +95,8 @@ select is((select count(*) from public.wallets where player_id = '44444444-0000-
   'players cannot read another player''s wallet');
 select is((select count(*) from public.wallets), 2::bigint,
   'player still sees their own personal wallet and their team wallet');
-select is((select count(*) from public.ledger_transactions), 0::bigint,
-  'ledger transaction headers are host-only');
+select is((select count(*) from public.ledger_transactions), 1::bigint,
+  'a player sees only the ledger transaction that touches their own wallet, for their wallet history');
 select is((select count(*) from public.ledger_entries), 1::bigint,
   'player sees only the ledger entry that touches their own wallet');
 select is((select count(*) from public.team_members), 1::bigint,

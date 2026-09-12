@@ -46,7 +46,7 @@ export default async function GamePage({
     ]);
   if (!currentPlayer) notFound();
 
-  const [{ data: wallet }, { data: missions }, { data: hints }, { data: notes }, { data: teamMember }, { data: hintOffers }, { data: houseSecret }, { data: activeBuzzes }, { data: vault }] =
+  const [{ data: wallet }, { data: missions }, { data: hints }, { data: notes }, { data: teamMember }, { data: hintOffers }, { data: houseSecret }, { data: activeBuzzes }, { data: vault }, { data: ledger }] =
     await Promise.all([
       supabase.from("wallets").select("id,balance").eq("player_id", currentPlayer.id).maybeSingle(),
       supabase
@@ -77,6 +77,12 @@ export default async function GamePage({
         .eq("accuser_player_id", currentPlayer.id)
         .in("status", ["pending", "confrontation", "confirmed"]),
       supabase.rpc("player_vault", { p_game_id: id }),
+      supabase
+        .from("ledger_transactions")
+        .select("id,type,description,created_at,idempotency_key,ledger_entries(amount,wallets(player_id))")
+        .eq("game_id", id)
+        .order("created_at", { ascending: false })
+        .limit(50),
     ]);
 
   // Active broadcast dilemmas that target this player, plus their own answer.
@@ -186,6 +192,7 @@ export default async function GamePage({
         }))}
         round={round}
         balance={Number(wallet?.balance ?? 0)}
+        ledger={ledger ?? []}
         missions={missions ?? []}
         hints={hints ?? []}
         notes={notes ?? []}

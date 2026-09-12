@@ -39,6 +39,7 @@ import {
 import { castVote } from "@/app/actions/admin";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
+import { playerTransactions } from "@/lib/game/ledger";
 import { Avatar } from "./avatar";
 import { HintIcon, isIconHint } from "./hint-icon";
 
@@ -109,6 +110,7 @@ type Props = {
   players: Player[];
   round: { id: string; title: string; kind: string; status: string; config: unknown; ends_at: string | null } | null;
   balance: number;
+  ledger: Array<Record<string, unknown>>;
   missions: Array<Record<string, unknown>>;
   hints: Array<Record<string, unknown>>;
   notes: Array<Record<string, unknown>>;
@@ -147,6 +149,11 @@ export function PlayerDashboard(props: Props) {
   );
 
   const [vaultOpen, setVaultOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const transactions = useMemo(
+    () => (historyOpen ? playerTransactions(props.ledger, props.playerId) : []),
+    [historyOpen, props.ledger, props.playerId],
+  );
   const [ackedMissionIds, setAckedMissionIds] = useState<string[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
@@ -356,28 +363,26 @@ export function PlayerDashboard(props: Props) {
       {(props.dilemmas ?? []).map((dilemma) => (
         <div key={dilemma.id} className="mt-4 rounded-2xl border border-pink-200 bg-white p-4 shadow-lg shadow-pink-500/10">
           <div className="flex items-center gap-2 font-black"><ShieldQuestion className="text-pink-600" /> {dilemma.prompt}</div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {(["accept", "refuse"] as const).map((choice) => {
-              const chosen = dilemma.myChoice === choice;
-              return (
+          {dilemma.myChoice ? (
+            <p className="mt-3 text-xs font-bold text-[var(--muted)]">
+              {dilemma.myChoice === "accept" ? t("dilemmaAccepted") : t("dilemmaRefused")}
+            </p>
+          ) : (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {(["accept", "refuse"] as const).map((choice) => (
                 <form key={choice} action={respondToDilemma}>
                   <input type="hidden" name="locale" value={props.locale} />
                   <input type="hidden" name="gameId" value={props.game.id} />
                   <input type="hidden" name="eventId" value={dilemma.id} />
                   <input type="hidden" name="playerId" value={props.playerId} />
                   <input type="hidden" name="choice" value={choice} />
-                  <button className={`pill w-full ${chosen ? "pill-primary" : "pill-secondary"}`}>
+                  <button className="pill pill-secondary w-full">
                     {choice === "accept" ? t("accept") : t("refuse")}
                   </button>
                 </form>
-              );
-            })}
-          </div>
-          {dilemma.myChoice ? (
-            <p className="mt-2 text-xs font-bold text-[var(--muted)]">
-              {dilemma.myChoice === "accept" ? t("dilemmaAccepted") : t("dilemmaRefused")}
-            </p>
-          ) : null}
+              ))}
+            </div>
+          )}
         </div>
       ))}
 
@@ -387,6 +392,27 @@ export function PlayerDashboard(props: Props) {
           <Coins size={18} /> {t("wallet")}
         </p>
         <p className="display mt-1 text-4xl font-black tabular-nums">{formatMoney(props.balance, props.game.currency_symbol)}</p>
+        <button
+          type="button"
+          onClick={() => setHistoryOpen((open) => !open)}
+          className="mt-4 flex w-full items-center justify-between text-xs font-bold text-white/90"
+          aria-expanded={historyOpen}
+        >
+          {historyOpen ? t("hideHistory") : t("showHistory")}
+          <span aria-hidden>{historyOpen ? "−" : "+"}</span>
+        </button>
+        {historyOpen ? (
+          <ul className="mt-2 space-y-1.5 border-t border-white/20 pt-2">
+            {transactions.length ? transactions.map((row) => (
+              <li key={row.id} className="flex items-center justify-between gap-2 text-xs">
+                <span className="min-w-0 truncate font-bold">{t.has(row.label) ? t(row.label) : row.label}</span>
+                <span className={`shrink-0 font-black ${row.amount >= 0 ? "text-emerald-200" : "text-red-200"}`}>
+                  {row.amount >= 0 ? "+" : "−"}{formatMoney(Math.abs(row.amount), props.game.currency_symbol)}
+                </span>
+              </li>
+            )) : <li className="text-xs text-white/80">{t("noMovements")}</li>}
+          </ul>
+        ) : null}
       </article>
 
       {/* 3. Buzz buttons */}
