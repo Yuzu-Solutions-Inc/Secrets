@@ -293,7 +293,10 @@ export async function setDilemmaChoice(formData: FormData) {
 
 // A player's answer to a broadcast dilemma. Upserts their single row in
 // game_event_responses; on Accept, the dilemma's effects are applied
-// automatically. The host reads the Accept/Refuse tally.
+// automatically. The host reads the Accept/Refuse tally. The choice is
+// permanent once made — a DB trigger (game_event_responses_lock_choice)
+// backstops this, but we check here too so a repeat submit is a silent no-op
+// instead of a thrown error.
 export async function respondToDilemma(formData: FormData) {
   const parsed = z.object({
     gameId: z.string().uuid(),
@@ -310,6 +313,8 @@ export async function respondToDilemma(formData: FormData) {
     .eq("game_event_id", parsed.eventId)
     .eq("player_id", parsed.playerId)
     .maybeSingle();
+
+  if (prior && prior.choice !== parsed.choice) return;
 
   const { error } = await supabase
     .from("game_event_responses")

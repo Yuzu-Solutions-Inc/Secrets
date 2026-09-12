@@ -252,7 +252,22 @@
       "finale": "finale",
       "completed": "completed",
       "archived": "archived"
-    }
+    },
+    "hideHistory": "Hide transaction history",
+    "showHistory": "Transaction history",
+    "noMovements": "No movements yet.",
+    "ledgerDefenseHeld": "Defense held",
+    "ledgerAccusationWon": "Accusation won",
+    "ledgerAccusationLost": "Accusation lost",
+    "ledgerHintSold": "Hint sold",
+    "ledgerHintBought": "Hint bought",
+    "ledgerMissionReward": "Mission reward",
+    "ledgerMissionPenalty": "Mission penalty",
+    "ledgerDilemma": "Dilemma",
+    "ledgerTeamPot": "Team pot",
+    "ledgerHostAdjustment": "Host adjustment",
+    "ledgerStartingCash": "Starting cash",
+    "ledgerCorrection": "Correction"
   },
   "host": {
     "control": "Control room",
