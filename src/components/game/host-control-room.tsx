@@ -461,7 +461,7 @@ export function HostControlRoom({
         {tabs.map(([key, label, Icon]) => (
           <button key={key} onClick={() => setTab(key)} className={`pill shrink-0 ${tab === key ? "pill-primary" : "pill-secondary"}`}>
             <Icon size={17} /> {label}
-            {key === "buzzes" && pendingBuzzes.length ? <span className="grid size-5 place-items-center rounded-full bg-white text-xs text-pink-700">{pendingBuzzes.length}</span> : null}
+            {key === "buzzes" && pendingBuzzes.length ? <span className="grid size-5 place-items-center rounded-full bg-red-600 text-xs font-black text-white">{pendingBuzzes.length}</span> : null}
           </button>
         ))}
       </div>
