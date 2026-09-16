@@ -41,6 +41,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
 import { playerTransactions } from "@/lib/game/ledger";
 import { Avatar } from "./avatar";
+import { ActionForm } from "./action-form";
 import { HintIcon, isIconHint } from "./hint-icon";
 
 type Player = {
@@ -370,7 +371,7 @@ export function PlayerDashboard(props: Props) {
           ) : (
             <div className="mt-3 grid grid-cols-2 gap-2">
               {(["accept", "refuse"] as const).map((choice) => (
-                <form key={choice} action={respondToDilemma}>
+                <ActionForm key={choice} action={respondToDilemma}>
                   <input type="hidden" name="locale" value={props.locale} />
                   <input type="hidden" name="gameId" value={props.game.id} />
                   <input type="hidden" name="eventId" value={dilemma.id} />
@@ -379,7 +380,7 @@ export function PlayerDashboard(props: Props) {
                   <button className="pill pill-secondary w-full">
                     {choice === "accept" ? t("accept") : t("refuse")}
                   </button>
-                </form>
+                </ActionForm>
               ))}
             </div>
           )}

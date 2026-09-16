@@ -322,7 +322,13 @@ export async function respondToDilemma(formData: FormData) {
       { game_event_id: parsed.eventId, player_id: parsed.playerId, choice: parsed.choice, updated_at: new Date().toISOString() },
       { onConflict: "game_event_id,player_id" },
     );
-  if (error) throw new Error(error.message);
+  // Two near-simultaneous submits (e.g. a double-click on Accept then Refuse)
+  // can both pass the `prior` check above before either commits; the loser
+  // then hits the DB's game_event_responses_lock_choice trigger. That's the
+  // same "already answered" case the check above handles — treat it as a
+  // no-op rather than surfacing a raw DB error.
+  if (error && !error.message.includes("dilemma_choice_locked")) throw new Error(error.message);
+  if (error) return;
 
   // Fire effects the first time this player accepts. The RPC is itself
   // idempotent, so a re-accept is harmless.
