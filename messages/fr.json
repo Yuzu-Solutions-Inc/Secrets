@@ -586,7 +586,10 @@
     "awardWildGuesserTitle": "Confiant… et Faux",
     "awardWildGuesserTagline": "Mauvaises accusations : {value}",
     "finaleOutroTitle": "C'est terminé",
-    "openReplayFinale": "Revoir le résumé"
+    "openReplayFinale": "Revoir le résumé",
+    "shareTitle": "Partagez le résumé",
+    "shareBlurb": "Téléchargez ces images et publiez une story",
+    "shareDownload": "Télécharger"
   },
   "gameStatus": {
     "draft": "Brouillon",

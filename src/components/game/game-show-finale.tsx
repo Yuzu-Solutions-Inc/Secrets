@@ -10,9 +10,10 @@ import {
   Sparkles,
   Target,
   TrendingDown,
+  Volume2,
   type LucideIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { formatMoney } from "@/lib/utils";
@@ -22,9 +23,11 @@ import { formatMoney } from "@/lib/utils";
 // a few by-the-numbers stats, then a set of funny superlative awards, one at
 // a time — before fading out to whatever the public display shows for a
 // completed game. Purely presentational: the caller (PublicDisplay) decides
-// when to mount it, owns the sound effects (see `onBeat`), and remembers
-// that it has run.
+// when to mount it and remembers that it has run. Reprises the opening's
+// theme for the outro (same file, own playback/fade — there's no dedicated
+// finale track).
 
+const AUDIO_SRC = "/audio/game-show-opening.mp3";
 const EXIT_MS = 2000;
 
 export type FinaleWinner = {
@@ -65,7 +68,7 @@ export type FinaleData = {
   awards: FinaleAward[];
 };
 
-const AWARD_META: Record<FinaleAwardKey, { Icon: LucideIcon; titleKey: string; taglineKey: string; isMoney: boolean }> = {
+export const AWARD_META: Record<FinaleAwardKey, { Icon: LucideIcon; titleKey: string; taglineKey: string; isMoney: boolean }> = {
   gossip: { Icon: Search, titleKey: "awardGossipTitle", taglineKey: "awardGossipTagline", isMoney: false },
   bigSpender: { Icon: HandCoins, titleKey: "awardBigSpenderTitle", taglineKey: "awardBigSpenderTagline", isMoney: true },
   rockBottom: { Icon: TrendingDown, titleKey: "awardRockBottomTitle", taglineKey: "awardRockBottomTagline", isMoney: true },
@@ -87,15 +90,15 @@ export function GameShowFinale({
   gameTitle,
   code,
   data,
+  soundOn,
   onDone,
-  onBeat,
 }: {
   brand: string;
   gameTitle: string;
   code: string;
   data: FinaleData;
+  soundOn: boolean;
   onDone: () => void;
-  onBeat?: (kind: "winner" | "award" | "outro") => void;
 }) {
   const t = useTranslations("display");
 
@@ -129,13 +132,49 @@ export function GameShowFinale({
   const [exiting, setExiting] = useState(false);
   const step = steps[stepIndex] ?? steps[steps.length - 1];
 
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [needsTap, setNeedsTap] = useState(false);
+
   const finish = useCallback(() => {
     setExiting((already) => {
       if (already) return already;
+      const el = audioRef.current;
+      if (el) {
+        // Ease the theme down across roughly the same two seconds as the
+        // visual fade.
+        const step = 0.9 / (EXIT_MS / 100);
+        const fade = window.setInterval(() => {
+          if (!audioRef.current) return window.clearInterval(fade);
+          const next = audioRef.current.volume - step;
+          if (next <= 0.02) {
+            audioRef.current.volume = 0;
+            audioRef.current.pause();
+            window.clearInterval(fade);
+          } else {
+            audioRef.current.volume = next;
+          }
+        }, 100);
+      }
       window.setTimeout(onDone, EXIT_MS);
       return true;
     });
   }, [onDone]);
+
+  // Kick off the theme once, when the finale mounts. Autoplay may be blocked
+  // until the host has already interacted with the page — fall back to a
+  // one-tap prompt, same as the opening.
+  useEffect(() => {
+    if (!soundOn) return;
+    const el = audioRef.current;
+    if (!el) return;
+    el.volume = 0.9;
+    el.currentTime = 0;
+    const attempt = el.play();
+    if (attempt && typeof attempt.then === "function") {
+      attempt.catch(() => setNeedsTap(true));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (exiting) return;
@@ -147,17 +186,21 @@ export function GameShowFinale({
   }, [stepIndex, steps.length, exiting, step, durationFor, finish]);
 
   useEffect(() => {
-    if (step.kind === "winner" || step.kind === "award" || step.kind === "outro") onBeat?.(step.kind);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stepIndex]);
-
-  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") finish();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [finish]);
+
+  const tapToStart = () => {
+    const el = audioRef.current;
+    if (el) {
+      el.volume = 0.9;
+      void el.play().catch(() => {});
+    }
+    setNeedsTap(false);
+  };
 
   const confetti = useMemo(
     () =>
@@ -182,6 +225,8 @@ export function GameShowFinale({
       aria-modal="true"
       aria-label={`${brand} — ${gameTitle}`}
     >
+      <audio ref={audioRef} src={AUDIO_SRC} preload="auto" />
+
       <style>{`
         @keyframes gsfSweep { 0% { transform: translateX(-60%) rotate(8deg); opacity: 0 } 30% { opacity: .5 } 100% { transform: translateX(60%) rotate(8deg); opacity: 0 } }
         @keyframes gsfRise { 0% { transform: translateY(28px) scale(.94); opacity: 0 } 100% { transform: translateY(0) scale(1); opacity: 1 } }
@@ -190,6 +235,7 @@ export function GameShowFinale({
         @keyframes gsfGlow { 0%,100% { text-shadow: 0 0 20px rgba(255,120,200,.5), 0 0 60px rgba(255,120,200,.25) } 50% { text-shadow: 0 0 32px rgba(255,170,220,.85), 0 0 90px rgba(255,120,200,.45) } }
         @keyframes gsfConfetti { 0% { transform: translate3d(0,-12vh,0) rotate(0); opacity: 1 } 100% { transform: translate3d(var(--dx,0),112vh,0) rotate(720deg); opacity: .9 } }
         @keyframes gsfSpin { to { transform: rotate(360deg) } }
+        @keyframes gsfPulseRing { 0% { transform: scale(.6); opacity: .7 } 100% { transform: scale(2.4); opacity: 0 } }
         @keyframes gsfTileIn { 0% { transform: translateY(20px) scale(.92); opacity: 0 } 100% { transform: translateY(0) scale(1); opacity: 1 } }
         .gsf-fade { animation: gsfRise .6s cubic-bezier(.2,1,.3,1) both }
         .gsf-slam { animation: gsfSlam .8s cubic-bezier(.2,1.3,.3,1) both }
@@ -356,6 +402,22 @@ export function GameShowFinale({
           </div>
         ) : null}
       </div>
+
+      {needsTap ? (
+        <button
+          type="button"
+          onClick={tapToStart}
+          className="absolute inset-0 z-20 grid place-items-center bg-black/45 backdrop-blur-sm"
+        >
+          <span className="flex items-center gap-3 rounded-full bg-white px-7 py-4 text-lg font-black text-[#2b0a26] shadow-2xl">
+            <span className="relative grid place-items-center">
+              <span className="absolute size-10 rounded-full bg-pink-400/50" style={{ animation: "gsfPulseRing 1.4s ease-out infinite" }} />
+              <Volume2 />
+            </span>
+            {t("openTapForSound")}
+          </span>
+        </button>
+      ) : null}
     </div>
   );
 }
