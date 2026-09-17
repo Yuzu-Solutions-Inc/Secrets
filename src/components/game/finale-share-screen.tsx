@@ -1,6 +1,6 @@
 "use client";
 
-import { Crown, Download } from "lucide-react";
+import { Crown, Download, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { AWARD_META, type FinaleData } from "./game-show-finale";
@@ -9,8 +9,18 @@ import { AWARD_META, type FinaleData } from "./game-show-finale";
 // run (or the host replays it later), the board underneath is replaced by
 // this — a set of story-ratio (1080x1920) recap cards, one per superlative
 // plus the winner, each rendered server-side by /api/assets/finale-card and
-// downloadable straight from the big screen so someone can post it.
-export function FinaleShareScreen({ code, data }: { code: string; data: FinaleData }) {
+// downloadable straight from the big screen so someone can post it. The
+// host can dismiss it back to the board with `onClose` and reopen it later
+// from the header (see PublicDisplay).
+export function FinaleShareScreen({
+  code,
+  data,
+  onClose,
+}: {
+  code: string;
+  data: FinaleData;
+  onClose: () => void;
+}) {
   const t = useTranslations("display");
   const locale = useLocale();
 
@@ -23,7 +33,17 @@ export function FinaleShareScreen({ code, data }: { code: string; data: FinaleDa
   if (cards.length === 0) return null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center gap-[clamp(1rem,2vh,1.75rem)] overflow-y-auto rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-[clamp(1.5rem,3vw,2.5rem)] text-center shadow-[var(--shadow)] backdrop-blur-xl">
+    <div className="relative flex min-h-0 flex-1 flex-col items-center gap-[clamp(1rem,2vh,1.75rem)] overflow-y-auto rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-[clamp(1.5rem,3vw,2.5rem)] text-center shadow-[var(--shadow)] backdrop-blur-xl">
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label={t("showDashboard")}
+        title={t("showDashboard")}
+        className="absolute right-[clamp(.75rem,1.5vw,1.25rem)] top-[clamp(.75rem,1.5vw,1.25rem)] grid size-8 shrink-0 place-items-center rounded-full bg-[var(--blush)] text-[color:var(--ink)] hover:bg-pink-100"
+      >
+        <X size={16} />
+      </button>
+
       <div>
         <p className="text-[clamp(.7rem,1.2vw,1rem)] font-black uppercase tracking-[.2em] text-pink-600">{t("shareTitle")}</p>
         <p className="mt-[6px] text-[clamp(.85rem,1.3vw,1.05rem)] font-semibold text-[color:var(--muted)]">{t("shareBlurb")}</p>

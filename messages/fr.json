@@ -589,7 +589,9 @@
     "openReplayFinale": "Revoir le résumé",
     "shareTitle": "Partagez le résumé",
     "shareBlurb": "Téléchargez ces images et publiez une story",
-    "shareDownload": "Télécharger"
+    "shareDownload": "Télécharger",
+    "showDashboard": "Afficher le tableau de bord",
+    "showShare": "Afficher les images à partager"
   },
   "gameStatus": {
     "draft": "Brouillon",

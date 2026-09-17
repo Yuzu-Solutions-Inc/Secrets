@@ -589,7 +589,9 @@
     "openReplayFinale": "Replay finale",
     "shareTitle": "Share the recap",
     "shareBlurb": "Download these and post a Story",
-    "shareDownload": "Download"
+    "shareDownload": "Download",
+    "showDashboard": "Show dashboard",
+    "showShare": "Show share cards"
   },
   "gameStatus": {
     "draft": "Draft",

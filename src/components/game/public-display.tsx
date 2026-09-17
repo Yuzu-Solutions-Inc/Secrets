@@ -1,6 +1,6 @@
 "use client";
 
-import { Clapperboard, Lightbulb, Maximize2, Megaphone, Minimize2, PartyPopper, ShieldQuestion, Siren, Sparkles, Timer, Trophy, Unlock, Volume2, VolumeX, Zap } from "lucide-react";
+import { Clapperboard, Images, LayoutDashboard, Lightbulb, Maximize2, Megaphone, Minimize2, PartyPopper, ShieldQuestion, Siren, Sparkles, Timer, Trophy, Unlock, Volume2, VolumeX, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -203,6 +203,10 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
   // on every dashboard poll while the game is still live.
   const [finaleData, setFinaleData] = useState<FinaleData | null>(null);
   const [showFinale, setShowFinale] = useState(false);
+  // Once completed, the share-card gallery replaces the board by default —
+  // but the host can close it to peek at the board (final balances, etc.)
+  // and reopen it later from the header.
+  const [showShareScreen, setShowShareScreen] = useState(true);
   const autoFinaleDoneRef = useRef(false);
   const finaleFetchedRef = useRef(false);
   const closeFinale = useCallback(() => setShowFinale(false), []);
@@ -717,6 +721,17 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
                 <Trophy className="size-1/2" />
               </button>
             ) : null}
+            {gameStatus === "completed" && finaleData ? (
+              <button
+                onClick={() => setShowShareScreen((v) => !v)}
+                aria-label={showShareScreen ? t("showDashboard") : t("showShare")}
+                title={showShareScreen ? t("showDashboard") : t("showShare")}
+                aria-pressed={showShareScreen}
+                className="grid size-[clamp(40px,4vw,56px)] shrink-0 place-items-center rounded-full bg-white text-[color:var(--ink)] ring-1 ring-[var(--border)] shadow-sm"
+              >
+                {showShareScreen ? <LayoutDashboard className="size-1/2" /> : <Images className="size-1/2" />}
+              </button>
+            ) : null}
             <button
               onClick={() => {
                 ensureAudio();
@@ -774,8 +789,8 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
           </div>
         ) : null}
 
-        {gameStatus === "completed" && finaleData ? (
-          <FinaleShareScreen code={code} data={finaleData} />
+        {gameStatus === "completed" && finaleData && showShareScreen ? (
+          <FinaleShareScreen code={code} data={finaleData} onClose={() => setShowShareScreen(false)} />
         ) : (
         <div className="grid min-h-0 flex-1 gap-[clamp(.75rem,2vw,1.5rem)] lg:grid-cols-[1fr_2fr]">
           <aside className="flex min-h-0 flex-col gap-[clamp(.75rem,1.5vw,1rem)] overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-[clamp(1.25rem,2.5vw,2rem)] shadow-[var(--shadow)] backdrop-blur-xl">
