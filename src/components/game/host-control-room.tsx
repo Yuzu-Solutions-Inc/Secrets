@@ -52,6 +52,7 @@ import {
   settleTeamDilemma,
   saveFinaleConfig,
   resolveFinale,
+  openFinaleBoxChoices,
   saveWinnerFormula,
   setPlayerPlayStatus,
   removeGamePlayer,
@@ -261,7 +262,6 @@ export function HostControlRoom({
   const [finaleMethod, setFinaleMethod] = useState<string>(
     () => String((((game.settings as Row | null)?.finale as Row | undefined)?.resolution as Row | undefined)?.method ?? "formula"),
   );
-  const [boxChoices, setBoxChoices] = useState<Record<string, "share" | "steal">>({});
   const [missionScope, setMissionScope] = useState<"none" | "all" | "player" | "team">("none");
   // Unit count for a use_multiplier mission's Approve/Fail forms, keyed by
   // assignment id — one input feeds both buttons.
@@ -1510,23 +1510,35 @@ export function HostControlRoom({
                 );
               }
               const activePlayers = players.filter((p) => String(p.play_status ?? "active") === "active");
+
+              // box_exchange is a two-step resolve: the host locks in the
+              // finalist roster (opening each finalist's own Share/Steal
+              // prompt on their phone) before the final "resolve & complete"
+              // — the host never sees or sets an individual choice.
+              const lockedFinalistIds = Array.isArray(finaleCfg.finalists)
+                ? (finaleCfg.finalists as unknown[]).map(String)
+                : null;
+              if (finaleMethod === "box_exchange" && !lockedFinalistIds) {
+                return (
+                  <ActionForm action={openFinaleBoxChoices} success={t("boxChoicesOpened")} className="bubble-card grid gap-3 p-6">
+                    <input type="hidden" name="locale" value={locale} />
+                    <input type="hidden" name="gameId" value={String(game.id)} />
+                    <h3 className="display text-2xl font-black">{t("openBoxChoices")}</h3>
+                    <p className="text-sm text-[var(--muted)]">{t("openBoxChoicesBlurb")}</p>
+                    <button className="pill pill-primary w-fit"><Vote size={16} /> {t("openBoxChoicesButton")}</button>
+                  </ActionForm>
+                );
+              }
+
+              const boxFinalists = lockedFinalistIds
+                ? players.filter((p) => lockedFinalistIds.includes(String(p.id)))
+                : activePlayers;
+              const boxChoicesMissing = finaleMethod === "box_exchange" && boxFinalists.some((p) => !p.finale_box_choice);
+
               return (
-                <form
-                  action={resolveFinale}
-                  className="bubble-card grid gap-3 p-6"
-                  onSubmit={(e) => {
-                    if (finaleMethod === "box_exchange") {
-                      const missing = activePlayers.some((p) => !boxChoices[String(p.id)]);
-                      if (missing) {
-                        e.preventDefault();
-                        alert(t("pickShareStealFirst"));
-                      }
-                    }
-                  }}
-                >
+                <form action={resolveFinale} className="bubble-card grid gap-3 p-6">
                   <input type="hidden" name="locale" value={locale} />
                   <input type="hidden" name="gameId" value={String(game.id)} />
-                  <input type="hidden" name="boxChoices" value={finaleMethod === "box_exchange" ? JSON.stringify(boxChoices) : ""} />
                   <h3 className="display text-2xl font-black">{t("resolveFinale")}</h3>
                   <p className="text-sm text-[var(--muted)]">{t("resolveFinaleBlurb", { method: finaleMethod })}</p>
 
@@ -1545,31 +1557,27 @@ export function HostControlRoom({
                   {finaleMethod === "box_exchange" ? (
                     <div className="grid gap-2">
                       <p className="text-xs font-bold text-[var(--muted)]">{t("finalistChoices")}</p>
-                      {activePlayers.map((player) => {
+                      {boxFinalists.map((player) => {
                         const profile = player.profiles as Row | null;
-                        const pid = String(player.id);
+                        const choice = player.finale_box_choice as "share" | "steal" | null | undefined;
                         return (
-                          <div key={pid} className="flex items-center justify-between gap-3 rounded-xl bg-pink-50 px-3 py-2 text-sm">
+                          <div key={String(player.id)} className="flex items-center justify-between gap-3 rounded-xl bg-pink-50 px-3 py-2 text-sm">
                             <span className="truncate font-bold">{String(profile?.display_name ?? tc("player"))}</span>
-                            <div className="flex gap-1">
-                              {(["share", "steal"] as const).map((choice) => (
-                                <button
-                                  key={choice}
-                                  type="button"
-                                  onClick={() => setBoxChoices((prev) => ({ ...prev, [pid]: choice }))}
-                                  className={`pill h-8 text-xs ${boxChoices[pid] === choice ? "pill-primary" : "pill-secondary"}`}
-                                >
-                                  {tp(choice)}
-                                </button>
-                              ))}
-                            </div>
+                            <span className={`pill h-7 text-xs ${choice ? "pill-primary" : "pill-secondary"}`}>
+                              {choice ? tp(choice) : t("choicePending")}
+                            </span>
                           </div>
                         );
                       })}
+                      {boxChoicesMissing ? (
+                        <p className="text-xs font-bold text-[var(--muted)]">{t("waitingOnChoices")}</p>
+                      ) : null}
                     </div>
                   ) : null}
 
-                  <button className="pill pill-primary w-fit"><Vote size={16} /> {t("resolveCompleteGame")}</button>
+                  <button className="pill pill-primary w-fit" disabled={boxChoicesMissing}>
+                    <Vote size={16} /> {t("resolveCompleteGame")}
+                  </button>
                 </form>
               );
             })()}

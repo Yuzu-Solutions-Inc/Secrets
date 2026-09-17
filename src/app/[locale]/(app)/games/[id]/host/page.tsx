@@ -38,7 +38,7 @@ export default async function HostPage({
     { data: ledger },
     { data: whitelist },
   ] = await Promise.all([
-    supabase.from("game_players").select("id,user_id,is_ready,play_status,profiles(display_name,email,avatar_path),wallets(balance)").eq("game_id", id),
+    supabase.from("game_players").select("id,user_id,is_ready,play_status,finale_box_choice,profiles(display_name,email,avatar_path),wallets(balance)").eq("game_id", id),
     supabase.from("game_rounds").select("*").eq("game_id", id).order("position"),
     supabase.from("accusation_buzzes").select("*,accuser:game_players!accuser_player_id(profiles(display_name)),target:game_players!target_player_id(profiles(display_name))").eq("game_id", id).order("created_at", { ascending: false }),
     supabase.from("missions").select("*,mission_assignments(id,player_id,submitted_at,evidence_path,game_players(profiles(display_name)))").eq("game_id", id).order("created_at", { ascending: false }),

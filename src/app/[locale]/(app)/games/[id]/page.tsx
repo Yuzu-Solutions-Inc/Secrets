@@ -32,7 +32,7 @@ export default async function GamePage({
         .eq("game_id", id),
       supabase
         .from("game_players")
-        .select("id,is_ready,user_id")
+        .select("id,is_ready,user_id,finale_box_choice")
         .eq("game_id", id)
         .eq("user_id", user.id)
         .maybeSingle(),
@@ -197,6 +197,7 @@ export default async function GamePage({
         hints={hints ?? []}
         notes={notes ?? []}
         teamMember={teamMember}
+        myFinaleBoxChoice={(currentPlayer as { finale_box_choice?: string | null }).finale_box_choice ?? null}
         hintOffers={hintOffers ?? []}
         houseSecret={houseSecret && typeof houseSecret === "object" ? houseSecret as Record<string, unknown> : null}
         houseAccusationOpen={houseAccusationOpen}
