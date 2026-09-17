@@ -26,9 +26,9 @@ insert into public.organization_members (organization_id, user_id, role) values
   ('22222222-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000003', 'player'),
   ('22222222-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000004', 'player');
 
-insert into public.games (id, organization_id, title, public_code, status, created_by)
+insert into public.games (id, organization_id, title, public_code, invite_token, status, created_by)
 values ('33333333-0000-0000-0000-000000000001', '22222222-0000-0000-0000-000000000001',
-        'Boundary Game', 'KB-TESTCODE', 'live', '11111111-0000-0000-0000-000000000001');
+        'Boundary Game', 'KB-TESTCODE', 'KB-TESTCODE-INVITE', 'live', '11111111-0000-0000-0000-000000000001');
 
 insert into public.game_players (id, game_id, user_id) values
   ('44444444-0000-0000-0000-000000000002', '33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000002'),
@@ -38,8 +38,9 @@ insert into public.game_rounds (id, game_id, title, kind, position, config)
 values ('55555555-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001',
         'Round One', 'team', 0, '{}'::jsonb);
 
-insert into public.teams (id, round_id, name)
-values ('66666666-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000001', 'Red');
+insert into public.teams (id, game_id, round_id, name)
+values ('66666666-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001',
+        '55555555-0000-0000-0000-000000000001', 'Red');
 
 insert into public.team_members (team_id, player_id, dilemma_choice) values
   ('66666666-0000-0000-0000-000000000001', '44444444-0000-0000-0000-000000000002', 'share'),

@@ -359,6 +359,16 @@ export const missions = pgTable("missions", {
   reward: bigint("reward", { mode: "number" }).notNull().default(0),
   penalty: bigint("penalty", { mode: "number" }).notNull().default(0),
   status: missionStatus("status").notNull().default("draft"),
+  // When set, the player must attach a proof photo to mark this mission done.
+  requireProof: boolean("require_proof").notNull().default(false),
+  // When set, the host can only approve/reject once the player has marked the
+  // mission complete (submitted). Off by default: the host can resolve it at
+  // any time. Always true when requireProof is set — submitting the photo is
+  // itself the completion signal, so the two aren't asked for separately.
+  requireCompletion: boolean("require_completion").notNull().default(false),
+  // When set, reward/penalty above are a per-unit amount; the host enters the
+  // unit count when approving/rejecting and it's multiplied in.
+  useMultiplier: boolean("use_multiplier").notNull().default(false),
   // Countdown length chosen at creation; deadline is stamped from it when the
   // host starts the mission.
   timerMinutes: integer("timer_minutes").notNull().default(0),

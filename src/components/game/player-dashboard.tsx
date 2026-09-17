@@ -976,6 +976,7 @@ function MyGame(props: MyGameProps) {
         const submitted = Boolean(row.submitted_at) || status === "submitted";
         const resolved = status === "approved" || status === "failed";
         const requireProof = Boolean(m.require_proof);
+        const useMultiplier = Boolean(m.use_multiplier);
         return (
           <div key={String(m.id)} className="rounded-2xl border border-pink-100 bg-white p-4">
             <div className="flex items-center gap-2 font-black"><Zap className="text-pink-600" /> {t("mission")}</div>
@@ -989,6 +990,9 @@ function MyGame(props: MyGameProps) {
                 <span className="mt-1 block text-red-600">
                   {t("penaltyIfFailed", { amount: formatMoney(Number(m.penalty), props.game.currency_symbol) })}
                 </span>
+              ) : null}
+              {useMultiplier ? (
+                <span className="mt-1 block text-xs font-normal text-[var(--muted)]">{t("multiplierNote")}</span>
               ) : null}
             </p>
             {resolved ? (

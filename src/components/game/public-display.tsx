@@ -1,17 +1,56 @@
 "use client";
 
-import { Clapperboard, Lightbulb, Maximize2, Megaphone, Minimize2, PartyPopper, ShieldQuestion, Siren, Sparkles, Timer, Unlock, Volume2, VolumeX, Zap } from "lucide-react";
+import { Clapperboard, Lightbulb, Maximize2, Megaphone, Minimize2, PartyPopper, ShieldQuestion, Siren, Sparkles, Timer, Trophy, Unlock, Volume2, VolumeX, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
 import { GameShowOpening, type OpeningPlayer } from "./game-show-opening";
+import { GameShowFinale, type FinaleAward, type FinaleAwardKey, type FinaleData } from "./game-show-finale";
 
 // Statuses the game sits in before round 1 goes live. A move out of one of
 // these into a live status is the cue for the game-show cold open.
 const PRELIVE_STATUSES = new Set(["draft", "secret_submission", "locked"]);
 const isLiveStatus = (status: string) => status === "live" || status === "finale";
+
+// Raw shape of the public_game_awards() RPC — snake_case straight from
+// Postgres, reshaped into FinaleData (camelCase) before it reaches the video.
+type RawFinaleAwards = {
+  game: { currency_symbol: string };
+  winner: { player_id: string; name: string; has_avatar: boolean; balance: number } | null;
+  stats: { player_count: number; secrets_revealed: number; accusations_made: number; rounds_played: number };
+  awards: { key: string; player_id: string; name: string; has_avatar: boolean; value: number }[];
+};
+
+const AWARD_KEYS = new Set<FinaleAwardKey>([
+  "gossip",
+  "bigSpender",
+  "rockBottom",
+  "tycoon",
+  "triggerHappy",
+  "masterSleuth",
+  "wildGuesser",
+]);
+
+function toFinaleData(raw: RawFinaleAwards): FinaleData {
+  const awards: FinaleAward[] = raw.awards
+    .filter((a): a is typeof a & { key: FinaleAwardKey } => AWARD_KEYS.has(a.key as FinaleAwardKey))
+    .map((a) => ({ key: a.key, playerId: a.player_id, name: a.name, hasAvatar: a.has_avatar, value: Number(a.value) }));
+  return {
+    currencySymbol: raw.game.currency_symbol,
+    winner: raw.winner
+      ? { playerId: raw.winner.player_id, name: raw.winner.name, hasAvatar: raw.winner.has_avatar, balance: Number(raw.winner.balance) }
+      : null,
+    stats: {
+      playerCount: raw.stats.player_count,
+      secretsRevealed: raw.stats.secrets_revealed,
+      accusationsMade: raw.stats.accusations_made,
+      roundsPlayed: raw.stats.rounds_played,
+    },
+    awards,
+  };
+}
 
 type Row = Record<string, unknown>;
 
@@ -156,6 +195,50 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
     return supabaseRef.current;
   }, []);
 
+  // ---- game-finish "finale" video --------------------------------------
+  // Same one-shot-per-game pattern as the opening, but keyed off the game
+  // landing on 'completed' (resolve_finale() has run). The stats/awards
+  // themselves live behind their own RPC — no point shipping that payload
+  // on every dashboard poll while the game is still live.
+  const [finaleData, setFinaleData] = useState<FinaleData | null>(null);
+  const [showFinale, setShowFinale] = useState(false);
+  const autoFinaleDoneRef = useRef(false);
+  const finaleFetchedRef = useRef(false);
+  const closeFinale = useCallback(() => setShowFinale(false), []);
+
+  const fetchFinale = useCallback(async () => {
+    if (finaleFetchedRef.current) return;
+    finaleFetchedRef.current = true;
+    const { data: raw, error } = await supabase().rpc("public_game_awards", { p_code: code });
+    if (!error && raw && typeof raw === "object") setFinaleData(toFinaleData(raw as RawFinaleAwards));
+    else finaleFetchedRef.current = false;
+  }, [code, supabase]);
+
+  useEffect(() => {
+    if (gameStatus !== "completed") return;
+    void fetchFinale();
+    if (autoFinaleDoneRef.current) return;
+
+    let alreadyShown = false;
+    try {
+      alreadyShown = window.localStorage.getItem(`secrets:finale:${gameId}`) === "1";
+    } catch {
+      /* private mode / storage disabled — fall through */
+    }
+    if (alreadyShown) {
+      autoFinaleDoneRef.current = true;
+      return;
+    }
+
+    autoFinaleDoneRef.current = true;
+    try {
+      window.localStorage.setItem(`secrets:finale:${gameId}`, "1");
+    } catch {
+      /* ignore */
+    }
+    setShowFinale(true);
+  }, [gameStatus, gameId, fetchFinale]);
+
   const refetch = useCallback(async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
@@ -251,6 +334,23 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
       } else {
         tone(0, 196, 0.32, "sawtooth", 0.26);
         tone(0.36, 146.83, 0.6, "sawtooth", 0.26);
+      }
+    },
+    [ensureAudio, tone],
+  );
+
+  const playFinaleBeat = useCallback(
+    (kind: "winner" | "award" | "outro") => {
+      const ctx = ensureAudio();
+      if (!ctx || ctx.state !== "running") return;
+      if (kind === "winner") {
+        [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => tone(i * 0.1, f, 0.55, "triangle", 0.3));
+      } else if (kind === "award") {
+        tone(0, 1046.5, 0.16, "sine", 0.24);
+        tone(0.12, 1318.5, 0.24, "sine", 0.22);
+      } else {
+        tone(0, 659.25, 0.2, "triangle", 0.24);
+        tone(0.16, 987.77, 0.5, "triangle", 0.24);
       }
     },
     [ensureAudio, tone],
@@ -476,6 +576,19 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
         />
       ) : null}
 
+      {showFinale && finaleData ? (
+        <GameShowFinale
+          brand={tRoot("brand")}
+          gameTitle={String(game.title)}
+          code={code}
+          data={finaleData}
+          onDone={closeFinale}
+          onBeat={(kind) => {
+            if (soundOn) playFinaleBeat(kind);
+          }}
+        />
+      ) : null}
+
       <style>{`
         @keyframes secretsAlarmFlash { 0%,100% { opacity: 0 } 8% { opacity: .92 } 55% { opacity: .28 } }
         @keyframes secretsAlarmSlam { 0% { transform: scale(.4) rotate(-8deg); opacity: 0 } 40% { transform: scale(1.08) rotate(2deg); opacity: 1 } 60% { transform: scale(.98) rotate(-1deg) } 100% { transform: scale(1) rotate(0); opacity: 1 } }
@@ -607,6 +720,19 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
                 className="grid size-[clamp(40px,4vw,56px)] shrink-0 place-items-center rounded-full bg-white text-[color:var(--ink)] ring-1 ring-[var(--border)] shadow-sm"
               >
                 <Clapperboard className="size-1/2" />
+              </button>
+            ) : null}
+            {gameStatus === "completed" && finaleData ? (
+              <button
+                onClick={() => {
+                  ensureAudio();
+                  setShowFinale(true);
+                }}
+                aria-label={t("openReplayFinale")}
+                title={t("openReplayFinale")}
+                className="grid size-[clamp(40px,4vw,56px)] shrink-0 place-items-center rounded-full bg-white text-[color:var(--ink)] ring-1 ring-[var(--border)] shadow-sm"
+              >
+                <Trophy className="size-1/2" />
               </button>
             ) : null}
             <button

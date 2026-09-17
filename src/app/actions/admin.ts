@@ -227,6 +227,13 @@ export async function createMission(formData: FormData) {
     timerMinutes: z.coerce.number().int().min(0).max(1440).optional().default(0),
     // When set, the player must attach a proof photo to mark the mission done.
     requireProof: z.enum(["on"]).optional(),
+    // When set, the host can only approve/reject once the player has marked
+    // the mission complete. requireProof implies this — attaching the photo
+    // is itself the completion signal — so the two aren't asked for twice.
+    requireCompletion: z.enum(["on"]).optional(),
+    // When set, reward/penalty are a per-unit amount; the host enters the
+    // unit count when resolving.
+    useMultiplier: z.enum(["on"]).optional(),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
   // Missions are always created as a hidden draft — including pre-assigned
@@ -241,6 +248,8 @@ export async function createMission(formData: FormData) {
     status: "draft",
     timer_minutes: parsed.timerMinutes,
     require_proof: parsed.requireProof === "on",
+    require_completion: parsed.requireProof === "on" || parsed.requireCompletion === "on",
+    use_multiplier: parsed.useMultiplier === "on",
   }).select("id").single();
   if (error) throw new Error(error.message);
 
@@ -279,12 +288,16 @@ export async function validateMission(formData: FormData) {
     missionId: z.string().uuid(),
     playerId: z.string().uuid(),
     result: z.enum(["approved", "failed"]),
+    // Unit count for a use_multiplier mission (e.g. hats worn); ignored by
+    // resolve_mission for missions that don't use a multiplier.
+    multiplier: z.coerce.number().int().min(0).optional().default(1),
   }).parse(Object.fromEntries(formData));
   const supabase = await createClient();
   const { error } = await supabase.rpc("resolve_mission", {
     p_mission_id: parsed.missionId,
     p_player_id: parsed.playerId,
     p_result: parsed.result,
+    p_multiplier: parsed.multiplier,
   });
   if (error) throw new Error(error.message);
   refresh(parsed.locale, parsed.gameId);

@@ -12,7 +12,7 @@ test("the root path lands the visitor on a supported locale", async ({ page }) =
 test("the English landing page renders its hero and login entry point", async ({ page }) => {
   await page.goto("/en");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await expect(page.getByRole("link", { name: /sign in/i })).toBeVisible();
+  await expect(page.getByRole("navigation").getByRole("link", { name: /sign in/i })).toBeVisible();
 });
 
 test("an unknown locale is a 404", async ({ page }) => {

@@ -3,8 +3,10 @@
 import {
   Banknote,
   Check,
+  CheckCheck,
   CirclePlay,
   Eye,
+  Hash,
   Lightbulb,
   ListChecks,
   Lock,
@@ -261,6 +263,9 @@ export function HostControlRoom({
   );
   const [boxChoices, setBoxChoices] = useState<Record<string, "share" | "steal">>({});
   const [missionScope, setMissionScope] = useState<"none" | "all" | "player" | "team">("none");
+  // Unit count for a use_multiplier mission's Approve/Fail forms, keyed by
+  // assignment id — one input feeds both buttons.
+  const [missionMultipliers, setMissionMultipliers] = useState<Record<string, number>>({});
 
   // Once the game has started, the invite panel is replaced by the host's
   // money-correction tools (item 11).
@@ -456,7 +461,7 @@ export function HostControlRoom({
         {tabs.map(([key, label, Icon]) => (
           <button key={key} onClick={() => setTab(key)} className={`pill shrink-0 ${tab === key ? "pill-primary" : "pill-secondary"}`}>
             <Icon size={17} /> {label}
-            {key === "buzzes" && pendingBuzzes.length ? <span className="grid size-5 place-items-center rounded-full bg-white text-xs text-pink-700">{pendingBuzzes.length}</span> : null}
+            {key === "buzzes" && pendingBuzzes.length ? <span className="grid size-5 place-items-center rounded-full bg-red-600 text-xs font-black text-white">{pendingBuzzes.length}</span> : null}
           </button>
         ))}
       </div>
@@ -1125,6 +1130,22 @@ export function HostControlRoom({
                 </span>
               </label>
 
+              <label className="flex items-start gap-2 text-xs font-bold">
+                <input className="mt-0.5 size-4 shrink-0 accent-pink-600" type="checkbox" name="requireCompletion" />
+                <span>
+                  {t("requireCompletionLabel")}
+                  <span className="mt-0.5 block font-normal text-[var(--muted)]">{t("requireCompletionHint")}</span>
+                </span>
+              </label>
+
+              <label className="flex items-start gap-2 text-xs font-bold">
+                <input className="mt-0.5 size-4 shrink-0 accent-pink-600" type="checkbox" name="useMultiplier" />
+                <span>
+                  {t("useMultiplierLabel")}
+                  <span className="mt-0.5 block font-normal text-[var(--muted)]">{t("useMultiplierHint")}</span>
+                </span>
+              </label>
+
               <button className="pill pill-primary w-fit"><Sparkles size={16} /> {t("saveDraftMission")}</button>
             </ActionForm>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -1162,6 +1183,12 @@ export function HostControlRoom({
                     {mission.require_proof ? (
                       <span className="inline-flex items-center gap-1 text-violet-700"><Eye size={13} /> {t("proofRequiredTag")}</span>
                     ) : null}
+                    {mission.require_completion && !mission.require_proof ? (
+                      <span className="inline-flex items-center gap-1 text-violet-700"><CheckCheck size={13} /> {t("completionRequiredTag")}</span>
+                    ) : null}
+                    {mission.use_multiplier ? (
+                      <span className="inline-flex items-center gap-1 text-amber-700"><Hash size={13} /> {t("multiplierTag")}</span>
+                    ) : null}
                   </div>
                   {isDraft ? (
                     <ActionForm action={startMission} success={t("toastMissionLive")} className="mt-4">
@@ -1195,22 +1222,40 @@ export function HostControlRoom({
                         ) : mission.require_proof && assignment.submitted_at ? (
                           <p className="mt-1 text-xs text-[var(--muted)]">{t("proofMissing")}</p>
                         ) : null}
-                        {assignment.submitted_at && !resolved ? (
-                          <div className="mt-2 grid grid-cols-2 gap-2">
-                            {(["approved", "failed"] as const).map((result) => (
-                              <ActionForm
-                                action={validateMission}
-                                key={result}
-                                success={result === "approved" ? t("toastMissionApproved") : t("toastMissionFailed")}
-                              >
-                                <input type="hidden" name="locale" value={locale} />
-                                <input type="hidden" name="gameId" value={String(game.id)} />
-                                <input type="hidden" name="missionId" value={String(mission.id)} />
-                                <input type="hidden" name="playerId" value={String(assignment.player_id)} />
-                                <input type="hidden" name="result" value={result} />
-                                <button className={`pill w-full ${result === "approved" ? "pill-primary" : "pill-secondary"}`}>{result === "approved" ? t("resultApproved") : t("resultFailed")}</button>
-                              </ActionForm>
-                            ))}
+                        {(!mission.require_completion || assignment.submitted_at) && !resolved ? (
+                          <div className="mt-2 space-y-2">
+                            {mission.use_multiplier ? (
+                              <label className="block text-xs font-bold">
+                                {t("multiplierLabel")}
+                                <input
+                                  className="field mt-1"
+                                  type="number"
+                                  min="0"
+                                  value={missionMultipliers[String(assignment.id)] ?? 1}
+                                  onChange={(e) => {
+                                    const value = Math.max(0, Number(e.target.value) || 0);
+                                    setMissionMultipliers((prev) => ({ ...prev, [String(assignment.id)]: value }));
+                                  }}
+                                />
+                              </label>
+                            ) : null}
+                            <div className="grid grid-cols-2 gap-2">
+                              {(["approved", "failed"] as const).map((result) => (
+                                <ActionForm
+                                  action={validateMission}
+                                  key={result}
+                                  success={result === "approved" ? t("toastMissionApproved") : t("toastMissionFailed")}
+                                >
+                                  <input type="hidden" name="locale" value={locale} />
+                                  <input type="hidden" name="gameId" value={String(game.id)} />
+                                  <input type="hidden" name="missionId" value={String(mission.id)} />
+                                  <input type="hidden" name="playerId" value={String(assignment.player_id)} />
+                                  <input type="hidden" name="result" value={result} />
+                                  <input type="hidden" name="multiplier" value={String(missionMultipliers[String(assignment.id)] ?? 1)} />
+                                  <button className={`pill w-full ${result === "approved" ? "pill-primary" : "pill-secondary"}`}>{result === "approved" ? t("resultApproved") : t("resultFailed")}</button>
+                                </ActionForm>
+                              ))}
+                            </div>
                           </div>
                         ) : null}
                       </div>
