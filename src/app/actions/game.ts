@@ -342,6 +342,25 @@ export async function respondToDilemma(formData: FormData) {
   revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
 }
 
+// A finalist's own share/steal pick for a box-exchange finale — the host
+// only opens the choice window (open_finale_box_choices); each player
+// submits their own answer here.
+export async function submitFinaleBoxChoice(formData: FormData) {
+  const parsed = z.object({
+    playerId: z.string().uuid(),
+    gameId: z.string().uuid(),
+    choice: z.enum(["share", "steal"]),
+    locale: localeSchema,
+  }).parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("submit_finale_box_choice", {
+    p_player_id: parsed.playerId,
+    p_choice: parsed.choice,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath(`/${parsed.locale}/games/${parsed.gameId}`);
+}
+
 export async function hostTransition(formData: FormData) {
   const parsed = z.object({
     gameId: z.string().uuid(),

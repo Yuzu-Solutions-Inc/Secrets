@@ -929,8 +929,14 @@ export async function saveFinaleConfig(formData: FormData) {
   const supabase = await createClient();
   const { data: game } = await supabase.from("games").select("settings").eq("id", parsed.gameId).single();
   const settings = z.record(z.string(), z.unknown()).catch({}).parse(game?.settings);
+  // If open_finale_box_choices() has already locked in a finalist roster,
+  // keep it — this form resaving would otherwise silently drop it (finale is
+  // replaced wholesale below) and strand resolveFinale/submitFinaleBoxChoice
+  // with no roster to read.
+  const existingFinale = z.object({ finalists: z.unknown().optional() }).catch({}).parse((settings as Record<string, unknown>).finale);
+  const finaleWithFinalists = existingFinale.finalists !== undefined ? { ...finale, finalists: existingFinale.finalists } : finale;
   const { error } = await supabase.from("games").update({
-    settings: { ...settings, finale },
+    settings: { ...settings, finale: finaleWithFinalists },
   }).eq("id", parsed.gameId);
   if (error) throw new Error(error.message);
   refresh(parsed.locale, parsed.gameId);
@@ -942,22 +948,24 @@ export async function saveFinaleConfig(formData: FormData) {
 export async function resolveFinale(formData: FormData) {
   const parsed = base.extend({
     winnerPlayerId: z.string().uuid().optional().or(z.literal("")),
-    boxChoices: z.string().optional().default(""),
   }).parse(Object.fromEntries(formData));
-  let boxChoices: unknown = null;
-  if (parsed.boxChoices) {
-    try {
-      boxChoices = JSON.parse(parsed.boxChoices);
-    } catch {
-      throw new Error("invalid_box_choices");
-    }
-  }
   const supabase = await createClient();
   const { error } = await supabase.rpc("resolve_finale", {
     p_game_id: parsed.gameId,
     p_winner_player_id: parsed.winnerPlayerId || null,
-    p_box_choices: boxChoices,
   });
+  if (error) throw new Error(error.message);
+  refresh(parsed.locale, parsed.gameId);
+}
+
+// For a box_exchange finale: locks in the finalist roster (same entry-mode
+// rules as resolve_finale) and opens each finalist's own Share/Steal prompt
+// on their phone. Once everyone has answered, resolveFinale reads those
+// choices instead of the host picking on their behalf.
+export async function openFinaleBoxChoices(formData: FormData) {
+  const parsed = base.parse(Object.fromEntries(formData));
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("open_finale_box_choices", { p_game_id: parsed.gameId });
   if (error) throw new Error(error.message);
   refresh(parsed.locale, parsed.gameId);
 }

@@ -10,6 +10,7 @@ import {
   Megaphone,
   ShieldQuestion,
   Users,
+  Vote,
   X,
   Zap,
 } from "lucide-react";
@@ -24,6 +25,7 @@ import {
   buyHint,
   createHintOffer,
   setDilemmaChoice,
+  submitFinaleBoxChoice,
   respondToDilemma,
   savePlayerNote,
   saveHouseNote,
@@ -116,6 +118,7 @@ type Props = {
   hints: Array<Record<string, unknown>>;
   notes: Array<Record<string, unknown>>;
   teamMember: Record<string, unknown> | null;
+  myFinaleBoxChoice?: string | null;
   hintOffers: Array<Record<string, unknown>>;
   houseSecret: Record<string, unknown> | null;
   houseAccusationOpen: boolean;
@@ -166,6 +169,15 @@ export function PlayerDashboard(props: Props) {
   const submissionOpen = props.game.status === "draft" || props.game.status === "secret_submission";
   const gameEnded = props.game.status === "completed" || props.game.status === "archived";
   const canSetSecret = !gameEnded && (!hasSecret || (submissionOpen && secretStatus === "draft"));
+
+  // Finale "box exchange": once the host opens choices, each finalist picks
+  // Share or Steal themselves — the host never sees or sets this for them.
+  const finaleSettings = (props.game.settings as Record<string, unknown> | null)?.finale as Record<string, unknown> | undefined;
+  const finaleMethod = (finaleSettings?.resolution as Record<string, unknown> | undefined)?.method ?? "formula";
+  const finaleFinalists = Array.isArray(finaleSettings?.finalists) ? (finaleSettings.finalists as unknown[]).map(String) : null;
+  const isFinaleFinalist = Boolean(finaleFinalists?.includes(props.playerId));
+  const showBoxChoicePrompt =
+    props.game.status === "finale" && finaleMethod === "box_exchange" && isFinaleFinalist;
 
   const hintsByPlayer = useMemo(() => {
     const groups = new Map<string, VaultHint[]>();
@@ -386,6 +398,35 @@ export function PlayerDashboard(props: Props) {
           )}
         </div>
       ))}
+
+      {/* Finale box exchange — a finalist's own Share/Steal call. Top-level
+          for the same reason as the dilemma cards above: always visible,
+          never buried behind a tab. */}
+      {showBoxChoicePrompt ? (
+        <div className="mt-4 rounded-2xl border border-violet-200 bg-white p-4 shadow-lg shadow-violet-500/10">
+          <div className="flex items-center gap-2 font-black"><Vote className="text-violet-600" /> {t("finaleBoxTitle")}</div>
+          <p className="mt-1 text-sm text-[var(--muted)]">{t("finaleBoxBlurb")}</p>
+          {props.myFinaleBoxChoice ? (
+            <p className="mt-3 text-xs font-bold text-[var(--muted)]">
+              {props.myFinaleBoxChoice === "share" ? t("finaleBoxChoseShare") : t("finaleBoxChoseSteal")}
+            </p>
+          ) : (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {(["share", "steal"] as const).map((choice) => (
+                <ActionForm key={choice} action={submitFinaleBoxChoice}>
+                  <input type="hidden" name="locale" value={props.locale} />
+                  <input type="hidden" name="gameId" value={props.game.id} />
+                  <input type="hidden" name="playerId" value={props.playerId} />
+                  <input type="hidden" name="choice" value={choice} />
+                  <button className={`pill w-full ${choice === "share" ? "pill-secondary" : "pill-primary"}`}>
+                    {t(choice)}
+                  </button>
+                </ActionForm>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {/* 2. Money */}
       <article className="mt-4 rounded-[var(--radius)] bg-gradient-to-br from-pink-500 to-fuchsia-700 p-5 text-white shadow-[var(--shadow)]">

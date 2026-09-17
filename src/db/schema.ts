@@ -186,6 +186,9 @@ export const gamePlayers = pgTable(
       .references(() => profiles.id, { onDelete: "cascade" }),
     isReady: boolean("is_ready").notNull().default(false),
     playStatus: text("play_status").notNull().default("active"),
+    // A finalist's own share/steal pick for a box-exchange finale (set via
+    // submit_finale_box_choice — the host never sees or sets this directly).
+    finaleBoxChoice: text("finale_box_choice"),
     joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [uniqueIndex("game_player_unique").on(table.gameId, table.userId)],
