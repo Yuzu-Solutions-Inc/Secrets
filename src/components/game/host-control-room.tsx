@@ -346,9 +346,13 @@ export function HostControlRoom({
   const hintPriceConfig = hintPriceRound?.config as Row | undefined;
   const hintPrice = Number(hintPriceConfig?.hintPrice ?? 0);
   const pendingBuzzes = buzzes.filter((buzz) => !["correct", "partial", "wrong", "cancelled", "retracted"].includes(String(buzz.status)));
+  const settings = (game.settings ?? {}) as Row;
+  const finaleResolved = Boolean(settings.finaleResult);
+  const finaleNeedsAttention = inFinale && !finaleResolved;
   const tabs = [
     ["players", t("players"), Users],
     ["rounds", t("rounds"), ListChecks],
+    ["finale", ts("finale"), Vote],
     ["secrets", t("secrets"), Eye],
     ["buzzes", t("buzzes"), Megaphone],
     ["missions", t("missions"), Sparkles],
@@ -356,7 +360,17 @@ export function HostControlRoom({
     ["settings", t("settings"), SlidersHorizontal],
   ] as const;
 
-  const settings = (game.settings ?? {}) as Row;
+  // Once the last round ends, the game sits in 'finale' status until the host
+  // resolves it — but that's a form buried under Settings, easy to miss. Drop
+  // the host straight onto the Finale tab the moment that happens (once per
+  // mount, so it doesn't yank them back if they've navigated elsewhere).
+  // Adjusting state during render, guarded against re-firing, per
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  const [autoSwitchedToFinale, setAutoSwitchedToFinale] = useState(false);
+  if (finaleNeedsAttention && !autoSwitchedToFinale) {
+    setAutoSwitchedToFinale(true);
+    setTab("finale");
+  }
   const economy = (settings.economy ?? {}) as Row;
   const settingsAccusationStake = Number(economy.accusation_stake ?? economy.accusationStake ?? hintPriceConfig?.accusationStake ?? 0);
   const settingsHintPrice = Number(economy.hint_price ?? economy.hintPrice ?? hintPrice);
@@ -462,6 +476,7 @@ export function HostControlRoom({
           <button key={key} onClick={() => setTab(key)} className={`pill shrink-0 ${tab === key ? "pill-primary" : "pill-secondary"}`}>
             <Icon size={17} /> {label}
             {key === "buzzes" && pendingBuzzes.length ? <span className="grid size-5 place-items-center rounded-full bg-red-600 text-xs font-black text-white">{pendingBuzzes.length}</span> : null}
+            {key === "finale" && finaleNeedsAttention ? <span className="size-2.5 animate-pulse rounded-full bg-red-600" aria-hidden="true" /> : null}
           </button>
         ))}
       </div>
@@ -1375,6 +1390,12 @@ export function HostControlRoom({
               <button className="pill pill-secondary w-fit">{t("uploadBg")}</button>
             </ActionForm>
 
+            <DeleteGameControls locale={locale} gameId={String(game.id)} title={String(game.title ?? "this game")} />
+          </div>
+        ) : null}
+
+        {tab === "finale" ? (
+          <div className="space-y-4">
             <ActionForm action={saveFinaleConfig} success={t("saveFinaleRules")} className="bubble-card grid gap-4 p-6">
               <input type="hidden" name="locale" value={locale} />
               <input type="hidden" name="gameId" value={String(game.id)} />
@@ -1554,8 +1575,6 @@ export function HostControlRoom({
             })()}
 
             <a className="pill pill-secondary w-full" href={`/api/games/${String(game.id)}/results`}>{t("exportCsv")}</a>
-
-            <DeleteGameControls locale={locale} gameId={String(game.id)} title={String(game.title ?? "this game")} />
           </div>
         ) : null}
 
