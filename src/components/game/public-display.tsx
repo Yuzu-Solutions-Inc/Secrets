@@ -1,6 +1,6 @@
 "use client";
 
-import { Clapperboard, Lightbulb, Maximize2, Megaphone, Minimize2, PartyPopper, ShieldQuestion, Siren, Sparkles, Timer, Trophy, Unlock, Volume2, VolumeX, Zap } from "lucide-react";
+import { Clapperboard, Images, LayoutDashboard, Lightbulb, Maximize2, Megaphone, Minimize2, PartyPopper, ShieldQuestion, Siren, Sparkles, Timer, Trophy, Unlock, Volume2, VolumeX, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/utils";
 import { GameShowOpening, type OpeningPlayer } from "./game-show-opening";
 import { GameShowFinale, type FinaleAward, type FinaleAwardKey, type FinaleData } from "./game-show-finale";
+import { FinaleShareScreen } from "./finale-share-screen";
 
 // Statuses the game sits in before round 1 goes live. A move out of one of
 // these into a live status is the cue for the game-show cold open.
@@ -202,6 +203,10 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
   // on every dashboard poll while the game is still live.
   const [finaleData, setFinaleData] = useState<FinaleData | null>(null);
   const [showFinale, setShowFinale] = useState(false);
+  // Once completed, the share-card gallery replaces the board by default —
+  // but the host can close it to peek at the board (final balances, etc.)
+  // and reopen it later from the header.
+  const [showShareScreen, setShowShareScreen] = useState(true);
   const autoFinaleDoneRef = useRef(false);
   const finaleFetchedRef = useRef(false);
   const closeFinale = useCallback(() => setShowFinale(false), []);
@@ -334,23 +339,6 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
       } else {
         tone(0, 196, 0.32, "sawtooth", 0.26);
         tone(0.36, 146.83, 0.6, "sawtooth", 0.26);
-      }
-    },
-    [ensureAudio, tone],
-  );
-
-  const playFinaleBeat = useCallback(
-    (kind: "winner" | "award" | "outro") => {
-      const ctx = ensureAudio();
-      if (!ctx || ctx.state !== "running") return;
-      if (kind === "winner") {
-        [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => tone(i * 0.1, f, 0.55, "triangle", 0.3));
-      } else if (kind === "award") {
-        tone(0, 1046.5, 0.16, "sine", 0.24);
-        tone(0.12, 1318.5, 0.24, "sine", 0.22);
-      } else {
-        tone(0, 659.25, 0.2, "triangle", 0.24);
-        tone(0.16, 987.77, 0.5, "triangle", 0.24);
       }
     },
     [ensureAudio, tone],
@@ -582,10 +570,8 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
           gameTitle={String(game.title)}
           code={code}
           data={finaleData}
+          soundOn={soundOn}
           onDone={closeFinale}
-          onBeat={(kind) => {
-            if (soundOn) playFinaleBeat(kind);
-          }}
         />
       ) : null}
 
@@ -735,6 +721,17 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
                 <Trophy className="size-1/2" />
               </button>
             ) : null}
+            {gameStatus === "completed" && finaleData ? (
+              <button
+                onClick={() => setShowShareScreen((v) => !v)}
+                aria-label={showShareScreen ? t("showDashboard") : t("showShare")}
+                title={showShareScreen ? t("showDashboard") : t("showShare")}
+                aria-pressed={showShareScreen}
+                className="grid size-[clamp(40px,4vw,56px)] shrink-0 place-items-center rounded-full bg-white text-[color:var(--ink)] ring-1 ring-[var(--border)] shadow-sm"
+              >
+                {showShareScreen ? <LayoutDashboard className="size-1/2" /> : <Images className="size-1/2" />}
+              </button>
+            ) : null}
             <button
               onClick={() => {
                 ensureAudio();
@@ -792,6 +789,9 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
           </div>
         ) : null}
 
+        {gameStatus === "completed" && finaleData && showShareScreen ? (
+          <FinaleShareScreen code={code} data={finaleData} onClose={() => setShowShareScreen(false)} />
+        ) : (
         <div className="grid min-h-0 flex-1 gap-[clamp(.75rem,2vw,1.5rem)] lg:grid-cols-[1fr_2fr]">
           <aside className="flex min-h-0 flex-col gap-[clamp(.75rem,1.5vw,1rem)] overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-[clamp(1.25rem,2.5vw,2rem)] shadow-[var(--shadow)] backdrop-blur-xl">
             <p className="flex items-center gap-[8px] text-[clamp(.7rem,1.2vw,1rem)] font-black uppercase tracking-[.2em] text-pink-600">
@@ -842,6 +842,7 @@ export function PublicDisplay({ code, initialData }: { locale: string; code: str
             ) : null}
           </article>
         </div>
+        )}
       </div>
     </div>
   );
