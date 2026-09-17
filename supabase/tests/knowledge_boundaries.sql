@@ -26,9 +26,9 @@ insert into public.organization_members (organization_id, user_id, role) values
   ('22222222-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000003', 'player'),
   ('22222222-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000004', 'player');
 
-insert into public.games (id, organization_id, title, public_code, status, created_by)
+insert into public.games (id, organization_id, title, public_code, invite_token, status, created_by)
 values ('33333333-0000-0000-0000-000000000001', '22222222-0000-0000-0000-000000000001',
-        'Boundary Game', 'KB-TESTCODE', 'live', '11111111-0000-0000-0000-000000000001');
+        'Boundary Game', 'KB-TESTCODE', 'KB-TESTCODE-INVITE', 'live', '11111111-0000-0000-0000-000000000001');
 
 insert into public.game_players (id, game_id, user_id) values
   ('44444444-0000-0000-0000-000000000002', '33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000002'),
