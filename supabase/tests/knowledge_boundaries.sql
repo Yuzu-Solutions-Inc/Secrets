@@ -38,8 +38,9 @@ insert into public.game_rounds (id, game_id, title, kind, position, config)
 values ('55555555-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001',
         'Round One', 'team', 0, '{}'::jsonb);
 
-insert into public.teams (id, round_id, name)
-values ('66666666-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000001', 'Red');
+insert into public.teams (id, game_id, round_id, name)
+values ('66666666-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001',
+        '55555555-0000-0000-0000-000000000001', 'Red');
 
 insert into public.team_members (team_id, player_id, dilemma_choice) values
   ('66666666-0000-0000-0000-000000000001', '44444444-0000-0000-0000-000000000002', 'share'),
